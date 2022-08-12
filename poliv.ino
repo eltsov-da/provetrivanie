@@ -1,9 +1,13 @@
+#include <vfs_api.h>
+#include <FSImpl.h>
+#include <FS.h>
+#define CONFIGFILE "/main.ini"
 #include "genral_exec.h"
-//#define DEBUG_PLUS
+#define DEBUG_PLUS
 //#define DEBUG_GPS
 //#define NOGPSDEBUG
 //#define DEBUG_WATER
-//#define GPSTRACKER
+#define GPSTRACKER
 #define NOGPS_DATE 0,9,9,16,07,2022
 #ifdef NOGPSDEBUG
 unsigned nogpsdate[][6] = {{23,57,9,15,07,2022},{23,57,10,15,07,2022},{23,59,9,15,07,2022},{0,1,9,16,07,2022},{0,3,9,16,07,2022},{0,5,9,16,07,2022},{0,7,9,16,07,2022},{0,9,9,16,07,2022}};
@@ -166,6 +170,57 @@ void digitalClockDisplay(time_t t,byte log=1){
 }
  
 
+//---------------------------------------------------------------------------
+scheduler::scheduler(String _taskname,int8_t _StHour,int8_t _StMin,int8_t _StDayofWeek,unsigned long _duration,float _volume,float _startT,float _stopT,byte _orderT)
+   :taskname(_taskname),StHour(_StHour),StMin(_StMin),StDayofWeek(_StDayofWeek),duration(_duration),volume(_volume),startT(_startT),stopT(stopT),orderT(_orderT)
+{
+
+aID=-1;
+finish=0;
+}
+
+#define NOFALARMS 5
+
+#define v1_3bochki 660000
+#define v1_2bochki 1000000
+#define v2_3bochki 1320000
+#define SCHEDULER_L sizeof(scheduler_arr)/sizeof(scheduler)
+#define TASKS_L sizeof(tasks_arr)/sizeof(task)
+#ifdef GPSTRACKER
+#define baseH 0
+#define baseM 0
+scheduler scheduler_arr[]={
+  {"Violet task",baseH,baseM+1,7,v1_2bochki,100,-300,-300,1},
+  {"White task",baseH,baseM+2,6,v1_2bochki,100,-300,-300,1},
+  {"blue task",baseH,baseM+3,-1,15000,60,-300,-300,1},
+  {"green task",baseH,baseM+4,6,15000,100,-300,-300,1},
+  {"yellow task",baseH,baseM+5,-1,15000,60,-300,-300,1},
+  {"White task",baseH,baseM+9,6,v1_2bochki,100,-300,-300,1},
+  {"blue task",baseH,baseM+8,-1,15000,60,-300,-300,1},
+  {"green task",baseH,baseM+7,6,15000,100,-300,-300,1},
+  {"yellow task",baseH,baseM+6,-1,15000,60,-300,-300,1}
+
+ /* {"Orange task",-1,-1,-1,0,-1,0}/*,
+  {"Water task",water_btn,orange_rel,-1,-1,-1,0,0,&stopInit,&stopStart,&stopExec,&stopFin}*/
+  };
+ 
+#else
+scheduler scheduler_arr[]={
+  {"Violet task",10,0,6,v1_2bochki,100,-300,-300,1},
+  {"White task",10,0,7,v1_2bochki,100,-300,-300,1},
+  {"blue task",18,30,-1,v1_3bochki,60,-300,-300,1},
+  {"green task",10,0,1,v1_2bochki,100,-300,-300,1},
+  {"yellow task",19,05,-1,v1_3bochki,60,-300,-300,1}
+ /* {"Orange task",-1,-1,-1,0,-1,0}/*,
+  {"Water task",water_btn,orange_rel,-1,-1,-1,0,0,&stopInit,&stopStart,&stopExec,&stopFin}*/
+  };
+#endif
+
+
+
+
+//---------------------------------------------------------------------------
+
 
 class general_init: public general_do
 {
@@ -180,7 +235,7 @@ class general_init: public general_do
     pinMode(x->btn, INPUT);
     digitalWrite(x->relay, HIGH);
     x->stat=0;
-    //todo добавление в расписание
+/*    //todo добавление в расписание
     if(x->StDayofWeek>0)
      {
      x->aID=Alarm.alarmRepeat((timeDayOfWeek_t)x->StDayofWeek,x->StHour,x->StMin,0,doalarm);
@@ -191,8 +246,8 @@ class general_init: public general_do
       {
        x->aID=Alarm.alarmRepeat(x->StHour,x->StMin,0,doalarm);   
       }
-     }
- //   Alarm.alarmRepeat(x->StHour,x->StMin,0,doalarm);
+     } */
+
    }
 } generalInit;
 
@@ -202,12 +257,19 @@ class general_start: public general_do
    virtual void handle(task *x) {
     digitalClockDisplay();
     dprint(x->taskname);dprintln(" started");
-    x->finish=x->duration+millis();
+    x->finish=scheduler_arr[x->schedulerID].duration+millis();
     digitalWrite(x->relay,LOW);
     digitalWrite(lightgreen_rel,LOW);
     digitalWrite(brown_rel,LOW);
     x->stat=1;
     pulseCount=0;
+    if(Alarm.count()<NOFALARMS)
+     {
+      x->aID=-1;
+      scheduler_arr[x->schedulerID].aID=-1;
+      x->schedulerID=-1;
+      bindShedulertoAlarm(getnextscheduler());
+     }
    }
 } generalStart;
 
@@ -289,15 +351,15 @@ class stop_fin: public general_do
 
 
 
-    // PushButton::PushButton(int8_t _pin, Event * _event,String _msg) : pin(_pin), state(true), event(_event),msg(_msg)
 
-task::task(String _taskname,int _btn,int _relay,int8_t _StHour,int8_t _StMin,int8_t _StDayofWeek,unsigned long _duration,unsigned long _finish,general_do * _init,general_do * _start,general_do * _exec,general_do * _fin)
-   :taskname(_taskname),btn(_btn),relay(_relay),StHour(_StHour),StMin(_StMin),StDayofWeek(_StDayofWeek),duration(_duration),finish(_finish),init(_init),start(_start),exec(_exec),fin(_fin)
+task::task(String _taskname,int _btn,int _relay,general_do * _init,general_do * _start,general_do * _exec,general_do * _fin)
+   :taskname(_taskname),btn(_btn),relay(_relay),init(_init),start(_start),exec(_exec),fin(_fin)
 {
 #ifdef DEBUG_PLUS
 dprintln("--------------------init--------------"); 
 #endif
 aID=-1;
+schedulerID=-1;
 }
 
 void task::check()
@@ -323,31 +385,117 @@ dprintln(finish-millis());
    }
 }
 //int relays[]={violet_rel,white_rel,blue_rel,green_rel,yellow_rel,orange_rel,brown_rel,lightgreen_rel};
-#define v1_3bochki 660000
-#define v1_2bochki 1000000
-#define v2_3bochki 1320000
+
 
 #ifdef GPSTRACKER
 task tasks_arr[]={
-  {"Violet task",violet_btn,violet_rel,10,0,6,v1_2bochki,0,&generalInit,&generalStart,&generalExec,&generalFin},
-  {"White task",white_btn,white_rel,10,0,7,v1_2bochki,0,&generalInit,&generalStart,&generalExec,&generalFin},
-  {"blue task",blue_btn,blue_rel,17,3,-1,30000,0,&generalInit,&generalStart,&generalExec,&generalFin},
-  {"green task",green_btn,green_rel,10,0,1,v1_2bochki,0,&generalInit,&generalStart,&generalExec,&generalFin},
-  {"yellow task",yellow_btn,yellow_rel,19,05,-1,v1_3bochki,0,&generalInit,&generalStart,&generalExec,&generalFin},
-  {"Orange task",orange_btn,orange_rel,-1,-1,-1,0,0,&stopInit,&stopStart,&stopExec,&stopFin}/*,
+  {"Violet task",violet_btn,violet_rel,&generalInit,&generalStart,&generalExec,&generalFin},
+  {"White task",white_btn,white_rel,&generalInit,&generalStart,&generalExec,&generalFin},
+  {"blue task",blue_btn,blue_rel,&generalInit,&generalStart,&generalExec,&generalFin},
+  {"green task",green_btn,green_rel,&generalInit,&generalStart,&generalExec,&generalFin},
+  {"yellow task",yellow_btn,yellow_rel,&generalInit,&generalStart,&generalExec,&generalFin},
+  {"Orange task",orange_btn,orange_rel,&stopInit,&stopStart,&stopExec,&stopFin}/*,
   {"Water task",water_btn,orange_rel,-1,-1,-1,0,0,&stopInit,&stopStart,&stopExec,&stopFin}*/
   };
+ 
 #else
 task tasks_arr[]={
-  {"Violet task",violet_btn,violet_rel,10,0,6,v1_2bochki,0,&generalInit,&generalStart,&generalExec,&generalFin},
-  {"White task",white_btn,white_rel,10,0,7,v1_2bochki,0,&generalInit,&generalStart,&generalExec,&generalFin},
-  {"blue task",blue_btn,blue_rel,18,30,-1,v1_3bochki,0,&generalInit,&generalStart,&generalExec,&generalFin},
-  {"green task",green_btn,green_rel,10,0,1,v1_2bochki,0,&generalInit,&generalStart,&generalExec,&generalFin},
-  {"yellow task",yellow_btn,yellow_rel,19,05,-1,v1_3bochki,0,&generalInit,&generalStart,&generalExec,&generalFin},
-  {"Orange task",orange_btn,orange_rel,-1,-1,-1,0,0,&stopInit,&stopStart,&stopExec,&stopFin}/*,
+  {"Violet task",violet_btn,violet_rel,&generalInit,&generalStart,&generalExec,&generalFin},
+  {"White task",white_btn,white_rel,&generalInit,&generalStart,&generalExec,&generalFin},
+  {"blue task",blue_btn,blue_rel,&generalInit,&generalStart,&generalExec,&generalFin},
+  {"green task",green_btn,green_rel,&generalInit,&generalStart,&generalExec,&generalFin},
+  {"yellow task",yellow_btn,yellow_rel,&generalInit,&generalStart,&generalExec,&generalFin},
+  {"Orange task",orange_btn,orange_rel,&stopInit,&stopStart,&stopExec,&stopFin}/*,
   {"Water task",water_btn,orange_rel,-1,-1,-1,0,0,&stopInit,&stopStart,&stopExec,&stopFin}*/
   };
+
 #endif
+int getnextscheduler()
+{
+  
+  //time_t value = (DOW-1) * SECS_PER_DAY + AlarmHMS(H,M,S);
+  //nextTrigger = value + nextSunday(time);
+  //nextTrigger = value + previousMidnight(time);
+int nexttask=-1;
+int j=0;
+time_t ntime = now();
+time_t tt;
+time_t ct=now()+8*SECS_PER_DAY;
+  for (int i=0;i<SCHEDULER_L;i++) 
+  {
+  
+  for (j=0;j<TASKS_L;j++)
+   {
+    if(tasks_arr[j].taskname.equals(scheduler_arr[i].taskname)) 
+     break;
+   }
+    if((scheduler_arr[i].aID<0) && (tasks_arr[j].aID<0))
+     {
+      if(scheduler_arr[i].StDayofWeek>0)
+       {
+        tt=previousSunday(ntime)+(scheduler_arr[i].StDayofWeek-1) * SECS_PER_DAY + AlarmHMS(scheduler_arr[i].StHour,scheduler_arr[i].StMin,0);
+        if(tt<=ntime)
+         {
+          tt=nextSunday(ntime)+(scheduler_arr[i].StDayofWeek-1) * SECS_PER_DAY + AlarmHMS(scheduler_arr[i].StHour,scheduler_arr[i].StMin,0);
+         }
+       }
+      else
+       {
+        tt=previousMidnight(ntime)+AlarmHMS(scheduler_arr[i].StHour,scheduler_arr[i].StMin,0);
+                if(tt<=ntime)
+         {
+           tt=nextMidnight(ntime)+AlarmHMS(scheduler_arr[i].StHour,scheduler_arr[i].StMin,0);
+         }
+       }
+      if(tt<ct)
+       {
+        ct=tt;
+        nexttask=i;
+       }
+     }
+    
+  }
+#ifdef DEBUG_PLUS
+dprint("got next scheduler");
+dprintln(nexttask);
+#endif    
+  return(nexttask);
+}
+
+int bindShedulertoAlarm(int id)
+{
+  int aID=-1;
+   for (task & ntask : tasks_arr)
+    {
+      if(ntask.aID<0)
+       {
+   
+        if(ntask.taskname.equals(scheduler_arr[id].taskname))
+         {
+          if(scheduler_arr[id].StDayofWeek>0)
+           {
+            aID=Alarm.alarmOnce((timeDayOfWeek_t)scheduler_arr[id].StDayofWeek,scheduler_arr[id].StHour,scheduler_arr[id].StMin,0,doalarm);
+          }
+          else
+          {
+          aID=Alarm.alarmOnce(scheduler_arr[id].StHour,scheduler_arr[id].StMin,0,doalarm);
+          }
+#ifdef DEBUG_PLUS
+dprint("Set ");
+dprint(ntask.taskname);
+dprint(" on:");
+digitalClockDisplay(Alarm.getNextTrigger(aID));
+#endif     
+        scheduler_arr[id].aID=aID;
+        ntask.aID=aID;
+        ntask.schedulerID=id;
+        break;
+         }
+        }
+    }
+   return(aID);
+}
+
 #define USE_SPECIALIST_METHODS
 void emergency_stop()
 {
@@ -393,8 +541,17 @@ void btCallback(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
   }
 }
 
+
+
 void setup() {
 Serial.begin(115200);
+/*File file = SPIFFS.open(CONFIGFILE, FILE_READ);
+if(file)
+{
+  
+}*/
+
+
 SerialBT.begin("poliv");
 dht.begin();
 SerialBT.register_callback(btCallback);
@@ -403,29 +560,37 @@ for (i=0;i<(sizeof(relays)+1)/sizeof(int);i++)
  {
   pinMode(relays[i], OUTPUT);
   digitalWrite(relays[i], HIGH);
- // dprintln(i);
  }
 for (i=0;i<(sizeof(btns)+1)/sizeof(int);i++)
  {
   pinMode(btns[i], INPUT);
  }
 
-    Serial1.begin(9600, SERIAL_8N1, GPS_PIN_TX, GPS_PIN_RX);
+   Serial1.begin(9600, SERIAL_8N1, GPS_PIN_TX, GPS_PIN_RX);
    Serial1.setRxBufferSize(1024);
    Alarm.delay(500);  
    dprintln("Search GPS..");
    Alarm.delay(1000);
 #ifdef GPSTRACKER
+// Если для отладки использую плату трекера
  pinMode(23, OUTPUT);
  digitalWrite(GPIO_NUM_23, HIGH);
 #endif
+
+
 setTime(setTimefromGPS(60*30*1000));
 setSyncProvider(CsetTimefromGPS);
 setSyncInterval(TIME_UPDATE);
+// Иницализируем задачи
 for (task & ntask : tasks_arr) ntask.init->handle(&ntask);
+for(int i=0;i<NOFALARMS;i++)
+ {
+  bindShedulertoAlarm(getnextscheduler());
+ }
+
 //Alarm.timerRepeat(TIME_UPDATE, CsetTimefromGPS);
 pinMode(water_btn, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(water_btn), pulseCounter, FALLING);
+attachInterrupt(digitalPinToInterrupt(water_btn), pulseCounter, FALLING);
 
 #ifdef DEBUG_MINUS
  emergency_stop();
