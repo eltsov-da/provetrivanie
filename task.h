@@ -3,7 +3,7 @@ class general_do;
 class task
 {
   public:
-  task(String,int,int,general_do *,general_do *,general_do *,general_do *);
+  task(String,int,general_do *,general_do *,general_do *,general_do *,byte,byte,byte,byte,byte,byte,byte,byte);
  /* void init();
   void start();
   void exec();
@@ -11,7 +11,8 @@ class task
   void check();
   String taskname;
   int btn;
-  int relay;
+//  int relay;
+  byte relays[8];
 /*  int8_t StHour;
   int8_t StMin;
   int8_t StDayofWeek;
@@ -25,6 +26,7 @@ class task
   general_do * start;
   general_do * exec;
   general_do * fin;
+  byte interruped;
   byte stat;
   int aID;
   int schedulerID;
@@ -32,16 +34,19 @@ class task
 class scheduler
 {
    public:
-  scheduler(String,int8_t,int8_t,int8_t,unsigned long,float,float,float,byte);
+  scheduler(String,int8_t,int8_t,int8_t,unsigned long,float,float,byte,float,float,byte,float,float,byte);
   String taskname;
   int8_t StHour;
   int8_t StMin;
   int8_t StDayofWeek;
   unsigned long duration;
-  float volume;
-  float startT;
+  // 
+  float startD[3];
+  float stopD[3];
+  byte orderD[3];
+/*  float startT;
   float stopT;
-  byte orderT;
+  byte orderT;*/
   unsigned long finish;
  // byte stat;
   int aID;

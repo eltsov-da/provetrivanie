@@ -3,7 +3,8 @@
 #include <FS.h>
 #define CONFIGFILE "/main.ini"
 #include "genral_exec.h"
-#define DEBUG_PLUS
+//#define DEBUG_PLUS
+//#define DEBUG_MINUS
 //#define DEBUG_GPS
 //#define NOGPSDEBUG
 //#define DEBUG_WATER
@@ -34,9 +35,15 @@ int nogps_i=0;
 #define blue_rel 14
 #define white_rel 27
 #define violet_rel 26
+#define NOFRELAYS sizeof(relays)/sizeof(relays[0])
 int relays[]={violet_rel,white_rel,blue_rel,green_rel,yellow_rel,orange_rel,brown_rel,lightgreen_rel};
+#define NOFBTNS sizeof(btns)/sizeof(btns[0])
 int btns[]={violet_btn,white_btn,blue_btn,green_btn,yellow_btn,orange_btn/*,water_btn*/};
-
+float sensors[3];
+#define Vol 0
+#define Tem 1
+#define Hum 2
+#define NOFSENSORS sizeof(sensors)/sizeof(sensors[0])
 #include <DHT.h>      // подключаем библиотеку для датчика
 DHT dht(22, DHT11);
 
@@ -171,11 +178,19 @@ void digitalClockDisplay(time_t t,byte log=1){
  
 
 //---------------------------------------------------------------------------
-scheduler::scheduler(String _taskname,int8_t _StHour,int8_t _StMin,int8_t _StDayofWeek,unsigned long _duration,float _volume,float _startT,float _stopT,byte _orderT)
-   :taskname(_taskname),StHour(_StHour),StMin(_StMin),StDayofWeek(_StDayofWeek),duration(_duration),volume(_volume),startT(_startT),stopT(stopT),orderT(_orderT)
+scheduler::scheduler(String _taskname,int8_t _StHour,int8_t _StMin,int8_t _StDayofWeek,unsigned long _duration,float _startV,float _stopV,byte _orderV,float _startT,float _stopT,byte _orderT,float _startH,float _stopH,byte _orderH)
+   :taskname(_taskname),StHour(_StHour),StMin(_StMin),StDayofWeek(_StDayofWeek),duration(_duration)
 {
-
-aID=-1;
+startD[0]=_startV;
+stopD[0]=_stopV;
+orderD[0]=_orderV;
+startD[1]=_startT;
+stopD[1]=_stopT;
+orderD[1]=_orderT;
+startD[2]=_startH;
+stopD[2]=_stopH;
+orderD[2]=_orderH;
+aID=-1; 
 finish=0;
 }
 
@@ -187,18 +202,16 @@ finish=0;
 #define SCHEDULER_L sizeof(scheduler_arr)/sizeof(scheduler)
 #define TASKS_L sizeof(tasks_arr)/sizeof(task)
 #ifdef GPSTRACKER
-#define baseH 0
-#define baseM 0
+#include "buildTime.h"
+#define baseH 19
+#define baseM 00
 scheduler scheduler_arr[]={
-  {"Violet task",baseH,baseM+1,7,v1_2bochki,100,-300,-300,1},
-  {"White task",baseH,baseM+2,6,v1_2bochki,100,-300,-300,1},
-  {"blue task",baseH,baseM+3,-1,15000,60,-300,-300,1},
-  {"green task",baseH,baseM+4,6,15000,100,-300,-300,1},
-  {"yellow task",baseH,baseM+5,-1,15000,60,-300,-300,1},
-  {"White task",baseH,baseM+9,6,v1_2bochki,100,-300,-300,1},
-  {"blue task",baseH,baseM+8,-1,15000,60,-300,-300,1},
-  {"green task",baseH,baseM+7,6,15000,100,-300,-300,1},
-  {"yellow task",baseH,baseM+6,-1,15000,60,-300,-300,1}
+  {"Violet task",BUILD_HOUR,BUILD_MIN+1, 3,40000,0,2,1,10,300,1,0,110,1},
+  {"White task",BUILD_HOUR,BUILD_MIN+2,  3,30000,0,2,1,10,300,1,0,110,1},
+  {"blue task",BUILD_HOUR,BUILD_MIN+3,  -1,15000,0,5,1,10,300,1,0,110,1},
+  {"green task",BUILD_HOUR,BUILD_MIN+4,  3,15000,0,3,1,10,300,1,0,110,1},
+  {"yellow task",BUILD_HOUR,BUILD_MIN+5,-1,15000,0,5,1,10,300,1,0,110,1},
+   {"tempr task",-1,-1,-1,                  5000,1,2,1,10,300,1,0,110,1}
 
  /* {"Orange task",-1,-1,-1,0,-1,0}/*,
   {"Water task",water_btn,orange_rel,-1,-1,-1,0,0,&stopInit,&stopStart,&stopExec,&stopFin}*/
@@ -206,11 +219,11 @@ scheduler scheduler_arr[]={
  
 #else
 scheduler scheduler_arr[]={
-  {"Violet task",10,0,6,v1_2bochki,100,-300,-300,1},
-  {"White task",10,0,7,v1_2bochki,100,-300,-300,1},
-  {"blue task",18,30,-1,v1_3bochki,60,-300,-300,1},
-  {"green task",10,0,1,v1_2bochki,100,-300,-300,1},
-  {"yellow task",19,05,-1,v1_3bochki,60,-300,-300,1}
+  {"Violet task",10,0,6,v1_2bochki,0,100,1,10,300,1,0,110,1},
+  {"White task",10,0,7,v1_2bochki,0,100,1,10,300,1,0,110,1},
+  {"blue task",18,30,-1,v1_3bochki,0,60,1,10,300,1,0,110,1},
+  {"green task",10,0,1,v1_2bochki,0,100,1,10,300,1,0,110,1},
+  {"yellow task",19,05,-1,v1_3bochki,0,60,1,10,300,1,0,110,1}
  /* {"Orange task",-1,-1,-1,0,-1,0}/*,
   {"Water task",water_btn,orange_rel,-1,-1,-1,0,0,&stopInit,&stopStart,&stopExec,&stopFin}*/
   };
@@ -228,12 +241,18 @@ class general_init: public general_do
 
  
    virtual void handle(task *x) {
- 
+#ifdef DEBUG_PLUS
     digitalClockDisplay();
     dprint (x->taskname);dprintln(" init");
-    pinMode(x->relay, OUTPUT);
+#endif
+for(int i=0;i<NOFRELAYS;i++)
+ {
+   if(x->relays[i])
+    pinMode(relays[i], OUTPUT);
+    digitalWrite(relays[i], HIGH);
+ }
     pinMode(x->btn, INPUT);
-    digitalWrite(x->relay, HIGH);
+//    digitalWrite(x->relay, HIGH);
     x->stat=0;
 /*    //todo добавление в расписание
     if(x->StDayofWeek>0)
@@ -257,19 +276,31 @@ class general_start: public general_do
    virtual void handle(task *x) {
     digitalClockDisplay();
     dprint(x->taskname);dprintln(" started");
-    x->finish=scheduler_arr[x->schedulerID].duration+millis();
-    digitalWrite(x->relay,LOW);
-    digitalWrite(lightgreen_rel,LOW);
-    digitalWrite(brown_rel,LOW);
-    x->stat=1;
-    pulseCount=0;
-    if(Alarm.count()<NOFALARMS)
+    if(scheduler_arr[x->schedulerID].StMin>0)  //если задача перманентная то задержка 49 дней (раньше сработает штатная перезагрузка) 
      {
+        x->finish=scheduler_arr[x->schedulerID].duration+millis();
+        pulseCount=0;
+     if(Alarm.count()<NOFALARMS)
+      {
       x->aID=-1;
       scheduler_arr[x->schedulerID].aID=-1;
       x->schedulerID=-1;
       bindShedulertoAlarm(getnextscheduler());
+      }
      }
+       else
+        {
+        x->finish=4294967290;
+        }
+    for(int i=0;i<NOFRELAYS;i++)
+     {
+      if(x->relays[i])
+        digitalWrite(relays[i],LOW);
+     }
+  //  digitalWrite(x->relay,LOW);
+ //   digitalWrite(lightgreen_rel,LOW);
+  //  digitalWrite(brown_rel,LOW);
+    x->stat=1;
    }
 } generalStart;
 
@@ -277,12 +308,72 @@ class general_exec: public general_do
 {
   public:
    virtual void handle(task *x) {
+
+bool sens=true;
+    for(int i=0;i<NOFSENSORS;i++)
+     {
+      if(sensors[i]<-10000)
+       sens*=1;
+      else 
+       sens*=(scheduler_arr[x->schedulerID].startD[i]<=sensors[i] && sensors[i]<=scheduler_arr[x->schedulerID].stopD[i])?scheduler_arr[x->schedulerID].orderD[i]:(!scheduler_arr[x->schedulerID].orderD[i]);
 #ifdef DEBUG_MINUS   
-     dprint(x->taskname);dprintln(" exec");
-#endif
-    digitalWrite(x->relay,LOW);
-    digitalWrite(lightgreen_rel,LOW);
-    digitalWrite(brown_rel,LOW);
+     dprint(x->taskname);dprint(" sens ");dprint(i); dprint(" value");dprint(sens);dprint(" sensor value  ");dprintln(sensors[i]);
+#endif   
+     }
+    if(sens)
+     {
+     for(int i=0;i<NOFRELAYS;i++)
+     {
+      if(x->relays[i])
+        digitalWrite(relays[i],LOW);
+     }
+     if(x->interruped!=0)
+      {
+       digitalClockDisplay();
+       dprint(x->taskname);dprintln(" resume"); 
+       dprint("sensors: ");
+          for(int i=0;i<NOFSENSORS;i++)
+          {
+           dprint(i); dprint(" value:");dprintln(String(sensors[i]));
+          } 
+      x->interruped=0;
+      }
+     }
+    else
+     {
+      if(scheduler_arr[x->schedulerID].StMin<0) //если это перманентная задача
+       {
+        if(scheduler_arr[x->schedulerID].finish==0)
+         {
+          scheduler_arr[x->schedulerID].finish=millis()+scheduler_arr[x->schedulerID].duration;  //то duration это задержка отключения после выхода датчика из диапазона
+         }
+       }
+  //      Serial.println("xx");
+  //     Serial.println(scheduler_arr[x->schedulerID].finish);
+      if( (scheduler_arr[x->schedulerID].finish<millis() && scheduler_arr[x->schedulerID].StMin<0)|| scheduler_arr[x->schedulerID].StMin>=0) // если вышло время задержки или задача не перманентная - выключаем реле
+       {    
+       for(int i=0;i<NOFRELAYS;i++)
+        {
+        if(x->relays[i])
+        digitalWrite(relays[i],HIGH);
+        }
+       if(!x->interruped)
+        {
+       digitalClockDisplay();
+       dprint(x->taskname);dprintln(" interruped"); 
+       dprint("sensors: ");
+          for(int i=0;i<NOFSENSORS;i++)
+          {
+           dprint(i); dprint(" value:");dprintln(String(sensors[i]));
+          }
+      x->interruped=1;
+       }
+       if(scheduler_arr[x->schedulerID].StMin<0) // Если задача перманентная сбрасываем задержку
+        {
+           scheduler_arr[x->schedulerID].finish=0;
+        }
+      }
+     }
    }
 } generalExec;
 
@@ -294,10 +385,12 @@ class general_fin: public general_do
      {
     digitalClockDisplay();
     dprint(x->taskname);dprintln(" stoped");
-    dprint("water:");dprintln(String(pulseCount*2.25/1000.));
-    digitalWrite(x->relay,HIGH);
-    digitalWrite(lightgreen_rel,HIGH);
-    digitalWrite(brown_rel,HIGH);
+    dprint("water:");dprintln(String(sensors[Vol]));
+    for(int i=0;i<NOFRELAYS;i++)
+     {
+      if(x->relays[i])
+        digitalWrite(relays[i],HIGH);
+     }
     x->stat=0;
      }
    }
@@ -308,10 +401,7 @@ class stop_init: public general_do
 {
   public:
    virtual void handle(task *x) {
- 
-    digitalClockDisplay();
-    dprint (x->taskname);dprintln(" init");
-    pinMode(x->btn, INPUT);
+   pinMode(x->btn, INPUT);    
    }
 } stopInit;
 
@@ -352,14 +442,16 @@ class stop_fin: public general_do
 
 
 
-task::task(String _taskname,int _btn,int _relay,general_do * _init,general_do * _start,general_do * _exec,general_do * _fin)
-   :taskname(_taskname),btn(_btn),relay(_relay),init(_init),start(_start),exec(_exec),fin(_fin)
+task::task(String _taskname,int _btn,general_do * _init,general_do * _start,general_do * _exec,general_do * _fin,byte _r0,byte _r1,byte _r2,byte _r3,byte _r4,byte _r5,byte _r6,byte _r7)
+   :taskname(_taskname),btn(_btn),init(_init),start(_start),exec(_exec),fin(_fin)
 {
 #ifdef DEBUG_PLUS
 dprintln("--------------------init--------------"); 
 #endif
 aID=-1;
 schedulerID=-1;
+interruped=0;
+relays[0]=_r0;relays[1]=_r1;relays[2]=_r2;relays[3]=_r3;relays[4]=_r4;relays[5]=_r5;relays[6]=_r6;relays[7]=_r7;
 }
 
 void task::check()
@@ -387,29 +479,17 @@ dprintln(finish-millis());
 //int relays[]={violet_rel,white_rel,blue_rel,green_rel,yellow_rel,orange_rel,brown_rel,lightgreen_rel};
 
 
-#ifdef GPSTRACKER
 task tasks_arr[]={
-  {"Violet task",violet_btn,violet_rel,&generalInit,&generalStart,&generalExec,&generalFin},
-  {"White task",white_btn,white_rel,&generalInit,&generalStart,&generalExec,&generalFin},
-  {"blue task",blue_btn,blue_rel,&generalInit,&generalStart,&generalExec,&generalFin},
-  {"green task",green_btn,green_rel,&generalInit,&generalStart,&generalExec,&generalFin},
-  {"yellow task",yellow_btn,yellow_rel,&generalInit,&generalStart,&generalExec,&generalFin},
-  {"Orange task",orange_btn,orange_rel,&stopInit,&stopStart,&stopExec,&stopFin}/*,
-  {"Water task",water_btn,orange_rel,-1,-1,-1,0,0,&stopInit,&stopStart,&stopExec,&stopFin}*/
+  {"Violet task",violet_btn,&generalInit,&generalStart,&generalExec,&generalFin,1,0,0,0,0,0,1,1},
+  {"White task",white_btn,&generalInit,&generalStart,&generalExec,&generalFin,0,1,0,0,0,0,1,1},
+  {"blue task",blue_btn,&generalInit,&generalStart,&generalExec,&generalFin,0,0,1,0,0,0,1,1},
+  {"green task",green_btn,&generalInit,&generalStart,&generalExec,&generalFin,0,0,0,1,0,0,1,1},
+  {"yellow task",yellow_btn,&generalInit,&generalStart,&generalExec,&generalFin,0,0,0,0,1,0,1,1},
+  {"Orange task",orange_btn,&stopInit,&stopStart,&stopExec,&stopFin,0,0,0,0,0,0,0,0}
+  ,
+  {"tempr task",orange_btn,&generalInit,&generalStart,&generalExec,&generalFin,0,0,0,0,0,0,0,0}
   };
  
-#else
-task tasks_arr[]={
-  {"Violet task",violet_btn,violet_rel,&generalInit,&generalStart,&generalExec,&generalFin},
-  {"White task",white_btn,white_rel,&generalInit,&generalStart,&generalExec,&generalFin},
-  {"blue task",blue_btn,blue_rel,&generalInit,&generalStart,&generalExec,&generalFin},
-  {"green task",green_btn,green_rel,&generalInit,&generalStart,&generalExec,&generalFin},
-  {"yellow task",yellow_btn,yellow_rel,&generalInit,&generalStart,&generalExec,&generalFin},
-  {"Orange task",orange_btn,orange_rel,&stopInit,&stopStart,&stopExec,&stopFin}/*,
-  {"Water task",water_btn,orange_rel,-1,-1,-1,0,0,&stopInit,&stopStart,&stopExec,&stopFin}*/
-  };
-
-#endif
 int getnextscheduler()
 {
   
@@ -429,6 +509,8 @@ time_t ct=now()+8*SECS_PER_DAY;
     if(tasks_arr[j].taskname.equals(scheduler_arr[i].taskname)) 
      break;
    }
+   if(scheduler_arr[i].StMin>=0) //Только если не перманентная задача
+    {
     if((scheduler_arr[i].aID<0) && (tasks_arr[j].aID<0))
      {
       if(scheduler_arr[i].StDayofWeek>0)
@@ -453,7 +535,7 @@ time_t ct=now()+8*SECS_PER_DAY;
         nexttask=i;
        }
      }
-    
+    }
   }
 #ifdef DEBUG_PLUS
 dprint("got next scheduler");
@@ -541,6 +623,14 @@ void btCallback(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
   }
 }
 
+void refresh_sensors()
+{
+  sensors[Vol]=pulseCount*2.25/1000.;
+  float hp = dht.readHumidity();
+  float tp = dht.readTemperature();
+  if(!isnan(hp)) sensors[Hum]=hp;
+  if(!isnan(tp)) sensors[Tem]=tp;
+}
 
 
 void setup() {
@@ -556,12 +646,12 @@ SerialBT.begin("poliv");
 dht.begin();
 SerialBT.register_callback(btCallback);
 int i;
-for (i=0;i<(sizeof(relays)+1)/sizeof(int);i++)
+for (i=0;i<NOFRELAYS;i++)
  {
   pinMode(relays[i], OUTPUT);
   digitalWrite(relays[i], HIGH);
  }
-for (i=0;i<(sizeof(btns)+1)/sizeof(int);i++)
+for(i=0;i<NOFBTNS;i++)
  {
   pinMode(btns[i], INPUT);
  }
@@ -583,18 +673,34 @@ setSyncProvider(CsetTimefromGPS);
 setSyncInterval(TIME_UPDATE);
 // Иницализируем задачи
 for (task & ntask : tasks_arr) ntask.init->handle(&ntask);
+// Устанавливаем таймеры
 for(int i=0;i<NOFALARMS;i++)
  {
   bindShedulertoAlarm(getnextscheduler());
  }
-
-//Alarm.timerRepeat(TIME_UPDATE, CsetTimefromGPS);
+for (i=0;i<SCHEDULER_L;i++) 
+ {
+  if(scheduler_arr[i].StMin<0)  // ищем и запускаем перманентные задачи
+   {
+    for (task & ntask : tasks_arr) 
+     {
+      if(ntask.taskname.equals(scheduler_arr[i].taskname))
+       {
+        ntask.schedulerID=i;
+        ntask.start->handle(&ntask); 
+        scheduler_arr[i].finish=0; 
+       }
+     }
+   }
+ }
+//Подключаем расходомер
 pinMode(water_btn, INPUT_PULLUP);
 attachInterrupt(digitalPinToInterrupt(water_btn), pulseCounter, FALLING);
-
-#ifdef DEBUG_MINUS
- emergency_stop();
-#endif
+//Сбрасываем значения датчиков в неопределено 
+ for(int i=0;i<NOFSENSORS;i++)
+  {
+    sensors[i]=-10001;
+  }
 }
 
 
@@ -681,8 +787,7 @@ return(tt);
 void loop() {
   int i;
   Alarm.delay(10);
- for (task & ntask : tasks_arr) ntask.check();
- if (Serial1.available()) {
+  if (Serial1.available()) {  //непрерывно читаем GPS 
    char g;
    g = Serial1.read();
 #ifdef    DEBUG_GPS
@@ -690,15 +795,15 @@ void loop() {
 #endif
    gps.encode(g);
    }
- if(pushbuffer==1)
+ refresh_sensors();
+ for (task & ntask : tasks_arr) ntask.check();  // непрерывно запускаем check по всем задачам
+ if(pushbuffer==1)   //при подключении bluetooth Serial выводим в порт log, расписание и т.п.
   {
   pushbuffer=0;
   using index_t = decltype(buffer)::index_t;
   for (index_t i = 0; i < buffer.size()-2; i++) {
      SerialBT.print((char)buffer[i]);
      }
-
-      
    for (int j = 0; j < 6; j++) {
     int k=0;
     for (task & ntask : tasks_arr) 
@@ -716,12 +821,18 @@ void loop() {
       }
       k=0;
      }
-   float hp = dht.readHumidity();
-   float tp = dht.readTemperature();
-   dprint("Humidity:");  dprint(String(hp));
-   dprint("Temperature:");  dprintln(String(tp));
+//   float hp = dht.readHumidity();
+//   float tp = dht.readTemperature();
+   dprint("Humidity:");  dprint(String(sensors[Hum]));
+   dprint("Temperature:");  dprintln(String(sensors[Vol]));
   }
- #ifdef DEBUG_WATER
- Serial.println(pulseCount);
- #endif
+if(millis()>4000000000) 
+ {
+  byte rst=1;
+   for (task & ntask : tasks_arr) 
+    {
+    if(ntask.finish>millis()) rst=0;   
+    }
+  if(rst) ESP.restart();  //если вдруг все долго работает без перезагрузок, и нет запущенных задач то лучше бы перезагрузиться
+ }
 }
