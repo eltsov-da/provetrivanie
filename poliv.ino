@@ -40,6 +40,7 @@ int relays[]={violet_rel,white_rel,blue_rel,green_rel,yellow_rel,orange_rel,brow
 #define NOFBTNS sizeof(btns)/sizeof(btns[0])
 int btns[]={violet_btn,white_btn,blue_btn,green_btn,yellow_btn,orange_btn/*,water_btn*/};
 float sensors[3];
+String sensorsname[3]={"Volume","Temperature","Humidity"};
 #define Vol 0
 #define Tem 1
 #define Hum 2
@@ -130,7 +131,14 @@ void dprintln(long s,byte log=1)
     buffer.push(bb[i]);
    }*/
 }
-
+void print_sensors()
+{
+  for(int i=0;i<NOFSENSORS;i++)
+   {
+    dprint(sensorsname[i]);dprint(":");
+    dprintln(String(sensors[i]));
+   }
+}
 void printDigits(int digits,byte log=1)
 {
   // utility function for digital clock display: prints preceding colon and leading 0
@@ -196,9 +204,9 @@ finish=0;
 
 #define NOFALARMS 5
 
-#define v1_3bochki 660000
-#define v1_2bochki 1000000
-#define v2_3bochki 1320000
+#define v1_3bochki 1000000
+#define v1_2bochki 1500000
+#define v2_3bochki 2000000
 #define SCHEDULER_L sizeof(scheduler_arr)/sizeof(scheduler)
 #define TASKS_L sizeof(tasks_arr)/sizeof(task)
 #ifdef GPSTRACKER
@@ -206,7 +214,7 @@ finish=0;
 #define baseH 19
 #define baseM 00
 scheduler scheduler_arr[]={
-  {"Violet task",BUILD_HOUR,BUILD_MIN+1, 3,40000,0,2,1,10,300,1,0,110,1},
+  {"Violet task",BUILD_HOUR,BUILD_MIN+6, 3,40000,0,2,1,10,300,1,0,110,1},
   {"White task",BUILD_HOUR,BUILD_MIN+2,  3,30000,0,2,1,10,300,1,0,110,1},
   {"blue task",BUILD_HOUR,BUILD_MIN+3,  -1,15000,0,5,1,10,300,1,0,110,1},
   {"green task",BUILD_HOUR,BUILD_MIN+4,  3,15000,0,3,1,10,300,1,0,110,1},
@@ -332,10 +340,7 @@ bool sens=true;
        digitalClockDisplay();
        dprint(x->taskname);dprintln(" resume"); 
        dprint("sensors: ");
-          for(int i=0;i<NOFSENSORS;i++)
-          {
-           dprint(i); dprint(" value:");dprintln(String(sensors[i]));
-          } 
+       print_sensors();
       x->interruped=0;
       }
      }
@@ -343,13 +348,13 @@ bool sens=true;
      {
       if(scheduler_arr[x->schedulerID].StMin<0) //если это перманентная задача
        {
-        if(scheduler_arr[x->schedulerID].finish==0)
+        if(scheduler_arr[x->schedulerID].finish==0 && (!x->interruped))
          {
           scheduler_arr[x->schedulerID].finish=millis()+scheduler_arr[x->schedulerID].duration;  //то duration это задержка отключения после выхода датчика из диапазона
          }
        }
-  //      Serial.println("xx");
-  //     Serial.println(scheduler_arr[x->schedulerID].finish);
+
+     //  Serial.println(scheduler_arr[x->schedulerID].finish-millis());
       if( (scheduler_arr[x->schedulerID].finish<millis() && scheduler_arr[x->schedulerID].StMin<0)|| scheduler_arr[x->schedulerID].StMin>=0) // если вышло время задержки или задача не перманентная - выключаем реле
        {    
        for(int i=0;i<NOFRELAYS;i++)
@@ -362,10 +367,7 @@ bool sens=true;
        digitalClockDisplay();
        dprint(x->taskname);dprintln(" interruped"); 
        dprint("sensors: ");
-          for(int i=0;i<NOFSENSORS;i++)
-          {
-           dprint(i); dprint(" value:");dprintln(String(sensors[i]));
-          }
+       print_sensors();
       x->interruped=1;
        }
        if(scheduler_arr[x->schedulerID].StMin<0) // Если задача перманентная сбрасываем задержку
@@ -385,7 +387,7 @@ class general_fin: public general_do
      {
     digitalClockDisplay();
     dprint(x->taskname);dprintln(" stoped");
-    dprint("water:");dprintln(String(sensors[Vol]));
+    print_sensors();
     for(int i=0;i<NOFRELAYS;i++)
      {
       if(x->relays[i])
@@ -600,9 +602,7 @@ void emergency_stop()
 
 void doalarm()
     {
-      
-      dprintln("Alarm");
-      int id;
+     int id;
       id=Alarm.getTriggeredAlarmId();
        for (task & ntask : tasks_arr) 
         {
@@ -667,7 +667,7 @@ for(i=0;i<NOFBTNS;i++)
  digitalWrite(GPIO_NUM_23, HIGH);
 #endif
 
-
+refresh_sensors();
 setTime(setTimefromGPS(60*30*1000));
 setSyncProvider(CsetTimefromGPS);
 setSyncInterval(TIME_UPDATE);
@@ -715,10 +715,7 @@ time_t CsetTimefromGPS()
 unsigned long st=millis();
  tmElements_t tm;
  time_t tt;
- float hp = dht.readHumidity();
- float tp = dht.readTemperature();
- dprint("Humidity:");  dprint(String(hp));
- dprint("Temperature:");  dprintln(String(tp));
+ print_sensors();
 /*if(gps.date.year()>=2022)
  {
  dprint("Now is: ");
@@ -823,8 +820,9 @@ void loop() {
      }
 //   float hp = dht.readHumidity();
 //   float tp = dht.readTemperature();
+   dprint("Volume:");  dprint(String(sensors[Vol]));
    dprint("Humidity:");  dprint(String(sensors[Hum]));
-   dprint("Temperature:");  dprintln(String(sensors[Vol]));
+   dprint("Temperature:");  dprintln(String(sensors[Tem]));
   }
 if(millis()>4000000000) 
  {
