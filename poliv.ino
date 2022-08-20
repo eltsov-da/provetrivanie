@@ -8,7 +8,7 @@
 //#define DEBUG_GPS
 //#define NOGPSDEBUG
 //#define DEBUG_WATER
-//#define DEBUG_VIOLET_BTN
+#define DEBUG_VIOLET_BTN
 //#define GPSTRACKER
 #define NOGPS_DATE 0,9,9,16,07,2022
 #ifdef NOGPSDEBUG
@@ -283,7 +283,9 @@ for(int i=0;i<NOFRELAYS;i++)
 
    }
 } generalInit;
-
+#ifdef DEBUG_VIOLET_BTN
+int vts=0;
+#endif
 class general_start: public general_do
 {
   public:
@@ -291,7 +293,7 @@ class general_start: public general_do
     digitalClockDisplay();
     dprint(x->taskname);dprintln(" started");
 //    if(scheduler_arr[x->schedulerID].StMin>0)  //если задача перманентная то задержка 49 дней (раньше сработает штатная перезагрузка) 
-     if(x->currentShed->StMin>0)  //если задача перманентная то задержка 49 дней (раньше сработает штатная перезагрузка)
+     if(x->currentShed->StMin>=0)  //если задача перманентная то задержка 49 дней (раньше сработает штатная перезагрузка)
      {
         x->finish=x->currentShed->duration+millis();
         pulseCount=0;
@@ -303,7 +305,16 @@ dprint("Alarm count: ");dprintln(Alarm.count());
       x->aID=-1;
       x->currentShed->aID=-1;
    //   x->schedulerID=-1;
-      bindShedulertoAlarm(getnextscheduler());
+#ifdef DEBUG_VIOLET_BTN
+int ia;
+ia=getnextscheduler();
+dprint("Next Alarm id: ");dprintln(ia);
+bindShedulertoAlarm(ia);
+dprint("Alarm count: ");dprintln(Alarm.count());
+#else
+bindShedulertoAlarm(getnextscheduler());
+#endif     
+      
     
       }
      }
@@ -396,6 +407,12 @@ class general_fin: public general_do
    virtual void handle(task *x) {
     if(x->stat!=0)
      {
+#ifdef DEBUG_VIOLET_BTN
+   if(x->taskname.equals("Violet task"))
+    {
+      vts=0;      
+    }
+#endif
     digitalClockDisplay();
     dprint(x->taskname);dprintln(" stoped");
     print_sensors();
@@ -558,11 +575,19 @@ void scheduler::check()
   if(btn>0)
   {
 #ifdef DEBUG_VIOLET_BTN
-   if(btn==violet_btn)
+#ifdef GPSTRACKER
+   if(btn==violet_btn && vts==0)
+    {
+      vts++;
+#else 
+   if(digitalRead(btn)==HIGH)
+   {
+#endif
 #else
   if(digitalRead(btn)==HIGH)
-#endif
    {
+#endif
+   
     for (task & ntask : tasks_arr)
      {
        if(ntask.taskname.equals(taskname))
