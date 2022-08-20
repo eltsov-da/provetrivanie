@@ -8,7 +8,8 @@
 //#define DEBUG_GPS
 //#define NOGPSDEBUG
 //#define DEBUG_WATER
-#define GPSTRACKER
+//#define DEBUG_VIOLET_BTN
+//#define GPSTRACKER
 #define NOGPS_DATE 0,9,9,16,07,2022
 #ifdef NOGPSDEBUG
 unsigned nogpsdate[][6] = {{23,57,9,15,07,2022},{23,57,10,15,07,2022},{23,59,9,15,07,2022},{0,1,9,16,07,2022},{0,3,9,16,07,2022},{0,5,9,16,07,2022},{0,7,9,16,07,2022},{0,9,9,16,07,2022}};
@@ -186,7 +187,7 @@ void digitalClockDisplay(time_t t,byte log=1){
  
 
 //---------------------------------------------------------------------------
-scheduler::scheduler(String _taskname,int8_t _btn,int8_t _StHour,int8_t _StMin,int8_t _StDayofWeek,unsigned long _duration,float _startV,float _stopV,byte _orderV,float _startT,float _stopT,byte _orderT,float _startH,float _stopH,byte _orderH)
+scheduler::scheduler(String _taskname,int8_t _btn,int8_t _StHour,int8_t _StMin,int8_t _StDayofWeek,unsigned long _duration,float _startV,float _stopV,int8_t _orderV,float _startT,float _stopT,int8_t _orderT,float _startH,float _stopH,int8_t _orderH)
    :taskname(_taskname),btn(_btn),StHour(_StHour),StMin(_StMin),StDayofWeek(_StDayofWeek),duration(_duration)
 {
 startD[0]=_startV;
@@ -214,13 +215,15 @@ finish=0;
 #define baseH 19
 #define baseM 00
 //int btns[]={violet_btn,white_btn,blue_btn,green_btn,yellow_btn,orange_btn/*,water_btn*/};
+//task name, button, start Hour, Start Min,Start day of week (Sinday =1),Duration,start volume,stop volume,side of interval,start tempr,stop tempr,sire of tempr interval,start hum,stop hum,side of hum interval,
+//side of interval 1 - between start and stop 0 - outside start and stop
 scheduler scheduler_arr[]={ 
   {"Violet task",violet_btn,BUILD_HOUR,BUILD_MIN+6, 5,40000,0,2,1,10,300,1,0,110,1},
   {"White task",white_btn,BUILD_HOUR,BUILD_MIN+2,  5,30000,0,2,1,10,300,1,0,110,1},
   {"blue task",blue_btn,BUILD_HOUR,BUILD_MIN+3,  -1,15000,0,5,1,10,300,1,0,110,1},
   {"green task",green_btn,BUILD_HOUR,BUILD_MIN+4,  5,15000,0,3,1,10,300,1,0,110,1},
   {"yellow task",yellow_btn,BUILD_HOUR,BUILD_MIN+5,-1,15000,0,5,1,10,300,1,0,110,1},
-   {"tempr task",-1,-1,-1,-1,                  5000,1,2,1,10,300,1,0,110,1},
+   {"tempr task",-1,-1,-1,-1,500,0,500,1,30,300,0,0,110,1},
    {"Orange task",orange_btn,-1,0,-1,0,0,0,0,0,0,0,0,0,0}
 
  /* {"Orange task",-1,-1,-1,0,-1,0}/*,
@@ -234,6 +237,7 @@ scheduler scheduler_arr[]={
   {"blue task",blue_btn,18,30,-1,v1_3bochki,0,60,1,10,300,1,0,110,1},
   {"green task",green_btn,10,0,1,v1_2bochki,0,100,1,10,300,1,0,110,1},
   {"yellow task",yellow_btn,19,05,-1,v1_3bochki,0,60,1,10,300,1,0,110,1},
+  {"tempr task",-1,-1,-1,-1,                  30000,0,500,1,15,300,0,0,110,1},
   {"Orange task",orange_btn,-1,0,-1,0,0,0,0,0,0,0,0,0,0}/*,
   {"Water task",water_btn,orange_rel,-1,-1,-1,0,0,&stopInit,&stopStart,&stopExec,&stopFin}*/
   };
@@ -261,7 +265,7 @@ for(int i=0;i<NOFRELAYS;i++)
     pinMode(relays[i], OUTPUT);
     digitalWrite(relays[i], HIGH);
  }
-    pinMode(x->btn, INPUT);
+ //   pinMode(x->btn, INPUT);
 //    digitalWrite(x->relay, HIGH);
     x->stat=0;
 /*    //todo добавление в расписание
@@ -291,12 +295,16 @@ class general_start: public general_do
      {
         x->finish=x->currentShed->duration+millis();
         pulseCount=0;
+#ifdef DEBUG_VIOLET_BTN
+dprint("Alarm count: ");dprintln(Alarm.count());
+#endif  
      if(Alarm.count()<NOFALARMS)
       {
       x->aID=-1;
       x->currentShed->aID=-1;
    //   x->schedulerID=-1;
       bindShedulertoAlarm(getnextscheduler());
+    
       }
      }
        else
@@ -481,14 +489,14 @@ dprintln(finish-millis());
 
 
 task tasks_arr[]={
-  {"Violet task",violet_btn,&generalInit,&generalStart,&generalExec,&generalFin,1,0,0,0,0,0,1,1},
-  {"White task",white_btn,&generalInit,&generalStart,&generalExec,&generalFin,0,1,0,0,0,0,1,1},
-  {"blue task",blue_btn,&generalInit,&generalStart,&generalExec,&generalFin,0,0,1,0,0,0,1,1},
-  {"green task",green_btn,&generalInit,&generalStart,&generalExec,&generalFin,0,0,0,1,0,0,1,1},
-  {"yellow task",yellow_btn,&generalInit,&generalStart,&generalExec,&generalFin,0,0,0,0,1,0,1,1},
-  {"Orange task",orange_btn,&stopInit,&stopStart,&stopExec,&stopFin,0,0,0,0,0,0,0,0}
+  {"Violet task",&generalInit,&generalStart,&generalExec,&generalFin,1,0,0,0,0,0,1,1},
+  {"White task",&generalInit,&generalStart,&generalExec,&generalFin,0,1,0,0,0,0,1,1},
+  {"blue task",&generalInit,&generalStart,&generalExec,&generalFin,0,0,1,0,0,0,1,1},
+  {"green task",&generalInit,&generalStart,&generalExec,&generalFin,0,0,0,1,0,0,1,1},
+  {"yellow task",&generalInit,&generalStart,&generalExec,&generalFin,0,0,0,0,1,0,1,1},
+  {"Orange task",&stopInit,&stopStart,&stopExec,&stopFin,0,0,0,0,0,0,0,0}
   ,
-  {"tempr task",orange_btn,&generalInit,&generalStart,&generalExec,&generalFin,0,0,0,0,0,0,0,0}
+  {"tempr task",&generalInit,&generalStart,&generalExec,&generalFin,0,0,0,0,0,1,0,0}
   };
  
 int getnextscheduler()
@@ -549,16 +557,25 @@ void scheduler::check()
 {
   if(btn>0)
   {
+#ifdef DEBUG_VIOLET_BTN
+   if(btn==violet_btn)
+#else
   if(digitalRead(btn)==HIGH)
+#endif
    {
     for (task & ntask : tasks_arr)
      {
        if(ntask.taskname.equals(taskname))
         {
-        if(ntask.aID>0)
+        if(ntask.aID>=0)
          {
+#ifdef DEBUG_VIOLET_BTN
+dprintln(aID);
+dprintln(ntask.aID);
+#endif          
          Alarm.free(aID);
-         ntask.aID=-1;   
+         ntask.aID=-1;
+         aID=-1;   
          }
         ntask.currentShed=this;
         ntask.start->handle(&ntask);  

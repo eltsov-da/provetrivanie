@@ -4,7 +4,7 @@ class general_do;
 class scheduler
 {
    public:
-  scheduler(String,int8_t,int8_t,int8_t,int8_t,unsigned long,float,float,byte,float,float,byte,float,float,byte);
+  scheduler(String,int8_t,int8_t,int8_t,int8_t,unsigned long,float,float,int8_t,float,float,int8_t,float,float,int8_t);
   String taskname;
   int8_t StHour;
   int8_t StMin;
