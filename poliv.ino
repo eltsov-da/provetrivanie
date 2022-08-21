@@ -8,8 +8,8 @@
 //#define DEBUG_GPS
 //#define NOGPSDEBUG
 //#define DEBUG_WATER
-#define DEBUG_VIOLET_BTN
-//#define GPSTRACKER
+//#define DEBUG_VIOLET_BTN
+#define GPSTRACKER
 #define NOGPS_DATE 0,9,9,16,07,2022
 #ifdef NOGPSDEBUG
 unsigned nogpsdate[][6] = {{23,57,9,15,07,2022},{23,57,10,15,07,2022},{23,59,9,15,07,2022},{0,1,9,16,07,2022},{0,3,9,16,07,2022},{0,5,9,16,07,2022},{0,7,9,16,07,2022},{0,9,9,16,07,2022}};
@@ -42,6 +42,7 @@ int relays[]={violet_rel,white_rel,blue_rel,green_rel,yellow_rel,orange_rel,brow
 int btns[]={violet_btn,white_btn,blue_btn,green_btn,yellow_btn,orange_btn/*,water_btn*/};
 float sensors[3];
 String sensorsname[3]={"Volume","Temperature","Humidity"};
+float sensors_delta[3]={0,0.5,0.5};
 #define Vol 0
 #define Tem 1
 #define Hum 2
@@ -344,8 +345,19 @@ bool sens=true;
      {
       if(sensors[i]<-10000)
        sens*=1;
-      else 
-       sens*=(x->currentShed->startD[i]<=sensors[i] && sensors[i]<=x->currentShed->stopD[i])?x->currentShed->orderD[i]:(!x->currentShed->orderD[i]);
+      else
+       {
+        
+       float dd=0;
+       if(x->interruped!=0)  //Если задача прервана то двигаем диапазон на sensors_delta[i], чтобы избежать дребезга 
+         {
+         dd=sensors_delta[i]*((x->currentShed->orderD[i])?1.:-1.);
+//          dprint("dd:");dprint(String(dd));dprint(" sensor value  ");dprint(String(sensors[i]));dprint(" sensor delta  ");dprintln(String(sensors_delta[i]));
+         }
+        
+         sens*=(x->currentShed->startD[i]+dd<=sensors[i] && sensors[i]<=x->currentShed->stopD[i]-dd)?x->currentShed->orderD[i]:(!x->currentShed->orderD[i]);
+       
+       }
 #ifdef DEBUG_MINUS   
      dprint(x->taskname);dprint(" sens ");dprint(i); dprint(" value");dprint(sens);dprint(" sensor value  ");dprintln(sensors[i]);
 #endif   
@@ -370,6 +382,8 @@ bool sens=true;
      {
       if(x->currentShed->StMin<0) //если это перманентная задача
        {
+        
+       
         if(x->currentShed->finish==0 && (!x->interruped))
          {
           x->currentShed->finish=millis()+x->currentShed->duration;  //то duration это задержка отключения после выхода датчика из диапазона
