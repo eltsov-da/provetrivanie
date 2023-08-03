@@ -9,7 +9,7 @@
 //#define NOGPSDEBUG
 //#define DEBUG_WATER
 //#define DEBUG_VIOLET_BTN
-#define GPSTRACKER
+//#define GPSTRACKER
 #define NOGPS_DATE 0,9,9,16,07,2022
 #ifdef NOGPSDEBUG
 unsigned nogpsdate[][6] = {{23,57,9,15,07,2022},{23,57,10,15,07,2022},{23,59,9,15,07,2022},{0,1,9,16,07,2022},{0,3,9,16,07,2022},{0,5,9,16,07,2022},{0,7,9,16,07,2022},{0,9,9,16,07,2022}};
@@ -21,6 +21,7 @@ int nogps_i=0;
 #define TIME_UPDATE 3600
 #endif 
 #define water_btn 21
+#define tempr_btn 22
 #define orange_btn 13
 #define yellow_btn 39
 #define green_btn 34
@@ -37,18 +38,20 @@ int nogps_i=0;
 #define white_rel 27
 #define violet_rel 26
 #define NOFRELAYS sizeof(relays)/sizeof(relays[0])
+
+unsigned long mill_restart 400000000;   //интервал автоматической перезагрузки
 int relays[]={violet_rel,white_rel,blue_rel,green_rel,yellow_rel,orange_rel,brown_rel,lightgreen_rel};
 #define NOFBTNS sizeof(btns)/sizeof(btns[0])
 int btns[]={violet_btn,white_btn,blue_btn,green_btn,yellow_btn,orange_btn/*,water_btn*/};
-float sensors[3];
-String sensorsname[3]={"Volume","Temperature","Humidity"};
-float sensors_delta[3]={0,0.5,0.5};
+float sensors[3];  // Значения татчиков
+String sensorsname[3]={"Volume","Temperature","Humidity"};  //Названия датчиков
+float sensors_delta[3]={0,0.5,0.5};  // Сдвиг интервала включения/выключения чтобы избежать дребизга
 #define Vol 0
 #define Tem 1
 #define Hum 2
 #define NOFSENSORS sizeof(sensors)/sizeof(sensors[0])
 #include <DHT.h>      // подключаем библиотеку для датчика
-DHT dht(22, DHT11);
+DHT dht(tempr_btn, DHT11);
 
 #include "BluetoothSerial.h"
 
@@ -112,26 +115,12 @@ void dprintln(String s,byte log=1)
 void dprint(long s,byte log=1)
 {
   dprint(String(s),log);
-  /*char bb[50];
-  Serial.print(s);
-  SerialBT.print(s);*/
-/*  sprintf(bb,"%s",s); 
-  for(int i=0;i<String(s).length()+1;i++)
-   {
-    buffer.push(bb[i]);
-   }*/
+
 }
 void dprintln(long s,byte log=1)
 {
   dprintln(String(s),log);
- /* char bb[50];
-  Serial.println(s);
-  SerialBT.println(s);
-  sprintf(bb,"%d\n",s); */
- /*   for(int i=0;i<String(s).length()+1;i++)
-   {
-    buffer.push(bb[i]);
-   }*/
+
 }
 void print_sensors()
 {
@@ -152,8 +141,6 @@ void printDigits(int digits,byte log=1)
 
 
 void digitalClockDisplay(){
-  // digital clock display of the time
-//  dprint("time ajust to: ");
   dprint(hour());
   dprint(":");
   printDigits(minute());
@@ -209,8 +196,8 @@ finish=0;
 #define v1_3bochki 1000000
 #define v1_2bochki 1500000
 #define v2_3bochki 2000000
-#define SCHEDULER_L sizeof(scheduler_arr)/sizeof(scheduler)
-#define TASKS_L sizeof(tasks_arr)/sizeof(task)
+#define NOFSCHEDULER sizeof(scheduler_arr)/sizeof(scheduler)
+#define NOFTASKS sizeof(tasks_arr)/sizeof(task)
 #ifdef GPSTRACKER
 #include "buildTime.h"
 #define baseH 19
@@ -233,11 +220,14 @@ scheduler scheduler_arr[]={
  
 #else
 scheduler scheduler_arr[]={
-  {"Violet task",violet_btn,10,0,6,v1_2bochki,0,100,1,10,300,1,0,110,1},
-  {"White task",white_btn,10,0,7,v1_2bochki,0,100,1,10,300,1,0,110,1},
-  {"blue task",blue_btn,18,30,-1,v1_3bochki,0,60,1,10,300,1,0,110,1},
-  {"green task",green_btn,10,0,1,v1_2bochki,0,100,1,10,300,1,0,110,1},
-  {"yellow task",yellow_btn,19,05,-1,v1_3bochki,0,60,1,10,300,1,0,110,1},
+  {"Violet task",violet_btn,10,0,6,v1_2bochki,0,100,1,18,300,1,0,110,1},
+  {"White task",white_btn,10,0,7,v1_2bochki,0,100,1,18,300,1,0,110,1},
+  {"blue task",blue_btn,10,0,1,v1_2bochki,0,100,1,18,300,1,0,110,1},
+  {"green task",green_btn,18,35,-1,v1_3bochki,0,60,1,18,300,1,0,110,1},
+  {"yellow task",yellow_btn,18,00,-1,v1_3bochki,0,60,1,18,300,1,0,110,1},
+/*    {"blue task",blue_btn,18,30,-1,v1_3bochki,0,60,1,18,300,1,0,110,1},
+  {"green task",green_btn,10,0,1,v1_2bochki,0,100,1,18,300,1,0,110,1},
+*/
   {"tempr task",-1,-1,-1,-1,                  30000,0,500,1,15,300,0,0,110,1},
   {"Orange task",orange_btn,-1,0,-1,0,0,0,0,0,0,0,0,0,0}/*,
   {"Water task",water_btn,orange_rel,-1,-1,-1,0,0,&stopInit,&stopStart,&stopExec,&stopFin}*/
@@ -297,7 +287,7 @@ class general_start: public general_do
      if(x->currentShed->StMin>=0)  //если задача перманентная то задержка 49 дней (раньше сработает штатная перезагрузка)
      {
         x->finish=x->currentShed->duration+millis();
-        pulseCount=0;
+        pulseCount=0;   //при старте типовой задачи сбрасываем датчик воды
 #ifdef DEBUG_VIOLET_BTN
 dprint("Alarm count: ");dprintln(Alarm.count());
 #endif  
@@ -541,10 +531,10 @@ int j=0;
 time_t ntime = now();
 time_t tt;
 time_t ct=now()+8*SECS_PER_DAY;
-  for (int i=0;i<SCHEDULER_L;i++) 
+  for (int i=0;i<NOFSCHEDULER;i++) 
   {
   
-  for (j=0;j<TASKS_L;j++)
+  for (j=0;j<NOFTASKS;j++)
    {
     if(tasks_arr[j].taskname.equals(scheduler_arr[i].taskname)) 
      break;
@@ -676,6 +666,7 @@ void emergency_stop()
       }
      }
   setTimefromGPS(60000);
+  mill_restart=millis()+1000*300;  //автоматический перезапуск через 5 минут или по окончании работающего задания 
 }
 
 void doalarm()
@@ -756,7 +747,7 @@ for(int i=0;i<NOFALARMS;i++)
  {
   bindShedulertoAlarm(getnextscheduler());
  }
-for (i=0;i<SCHEDULER_L;i++) 
+for (i=0;i<NOFSCHEDULER;i++) 
  {
   if(scheduler_arr[i].StMin<0)  // ищем и запускаем перманентные задачи
    {
@@ -905,7 +896,7 @@ void loop() {
    dprint("Humidity:");  dprint(String(sensors[Hum]));
    dprint("Temperature:");  dprintln(String(sensors[Tem]));
   }
-if(millis()>4000000000) 
+if(millis()>mill_restart) 
  {
   byte rst=1;
    for (task & ntask : tasks_arr) 
