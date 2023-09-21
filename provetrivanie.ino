@@ -3,13 +3,15 @@
 #include <FS.h>
 #define CONFIGFILE "/main.ini"
 #include "genral_exec.h"
-//#define DEBUG_PLUS
+#define DEBUG_PLUS
+//#define DEBUG_LOOP
 //#define DEBUG_MINUS
 //#define DEBUG_GPS
 //#define NOGPSDEBUG
 //#define DEBUG_WATER
 //#define DEBUG_VIOLET_BTN
 //#define GPSTRACKER
+#define BTNTRIM 1000
 #define NOGPS_DATE 0,9,9,16,07,2022
 #ifdef NOGPSDEBUG
 unsigned nogpsdate[][6] = {{23,57,9,15,07,2022},{23,57,10,15,07,2022},{23,59,9,15,07,2022},{0,1,9,16,07,2022},{0,3,9,16,07,2022},{0,5,9,16,07,2022},{0,7,9,16,07,2022},{0,9,9,16,07,2022}};
@@ -38,8 +40,9 @@ int nogps_i=0;
 #define white_rel 27
 #define violet_rel 26
 #define NOFRELAYS sizeof(relays)/sizeof(relays[0])
+#define NOFPROCS 10
 
-unsigned long mill_restart 400000000;   //интервал автоматической перезагрузки
+unsigned long mill_restart=400000000;   //интервал автоматической перезагрузки
 int relays[]={violet_rel,white_rel,blue_rel,green_rel,yellow_rel,orange_rel,brown_rel,lightgreen_rel};
 #define NOFBTNS sizeof(btns)/sizeof(btns[0])
 int btns[]={violet_btn,white_btn,blue_btn,green_btn,yellow_btn,orange_btn/*,water_btn*/};
@@ -175,9 +178,10 @@ void digitalClockDisplay(time_t t,byte log=1){
  
 
 //---------------------------------------------------------------------------
-scheduler::scheduler(String _taskname,int8_t _btn,int8_t _StHour,int8_t _StMin,int8_t _StDayofWeek,unsigned long _duration,float _startV,float _stopV,int8_t _orderV,float _startT,float _stopT,int8_t _orderT,float _startH,float _stopH,int8_t _orderH)
+scheduler::scheduler(String _taskname,int8_t _btn,int8_t _StHour,int8_t _StMin,int8_t _StDayofWeek,unsigned long _duration,float _startV,float _stopV,int8_t _orderV,float _startT,float _stopT,int8_t _orderT,float _startH,float _stopH,int8_t _orderH,byte _r0,byte _r1,byte _r2,byte _r3,byte _r4,byte _r5,byte _r6,byte _r7)
    :taskname(_taskname),btn(_btn),StHour(_StHour),StMin(_StMin),StDayofWeek(_StDayofWeek),duration(_duration)
 {
+byte trelays[NOFRELAYS];
 startD[0]=_startV;
 stopD[0]=_stopV;
 orderD[0]=_orderV;
@@ -189,6 +193,14 @@ stopD[2]=_stopH;
 orderD[2]=_orderH;
 aID=-1; 
 finish=0;
+trelays[0]=_r0;trelays[1]=_r1;trelays[2]=_r2;trelays[3]=_r3;trelays[4]=_r4;trelays[5]=_r5;trelays[6]=_r6;trelays[7]=_r7;
+for(int i=0;i<NOFRELAYS;i++)
+ {
+  if(trelays[i]!=0)
+   {
+    relays[trelays[i]]=i;
+   }
+ }
 }
 
 #define NOFALARMS 5
@@ -196,8 +208,10 @@ finish=0;
 #define v1_3bochki 1000000
 #define v1_2bochki 1500000
 #define v2_3bochki 2000000
-#define NOFSCHEDULER sizeof(scheduler_arr)/sizeof(scheduler)
+#define NOFSCHEDULER sizeof(schedulers_arr)/sizeof(scheduler)
 #define NOFTASKS sizeof(tasks_arr)/sizeof(task)
+
+
 #ifdef GPSTRACKER
 #include "buildTime.h"
 #define baseH 19
@@ -205,31 +219,37 @@ finish=0;
 //int btns[]={violet_btn,white_btn,blue_btn,green_btn,yellow_btn,orange_btn/*,water_btn*/};
 //task name, button, start Hour, Start Min,Start day of week (Sinday =1),Duration,start volume,stop volume,side of interval,start tempr,stop tempr,sire of tempr interval,start hum,stop hum,side of hum interval,
 //side of interval 1 - between start and stop 0 - outside start and stop
-scheduler scheduler_arr[]={ 
-  {"Violet task",violet_btn,BUILD_HOUR,BUILD_MIN+6, 5,40000,0,2,1,10,300,1,0,110,1},
-  {"White task",white_btn,BUILD_HOUR,BUILD_MIN+2,  5,30000,0,2,1,10,300,1,0,110,1},
-  {"blue task",blue_btn,BUILD_HOUR,BUILD_MIN+3,  -1,15000,0,5,1,10,300,1,0,110,1},
-  {"green task",green_btn,BUILD_HOUR,BUILD_MIN+4,  5,15000,0,3,1,10,300,1,0,110,1},
-  {"yellow task",yellow_btn,BUILD_HOUR,BUILD_MIN+5,-1,15000,0,5,1,10,300,1,0,110,1},
-   {"tempr task",-1,-1,-1,-1,500,0,500,1,30,300,0,0,110,1},
-   {"Orange task",orange_btn,-1,0,-1,0,0,0,0,0,0,0,0,0,0}
+// последние 8 цифр это номера релле используемые в задаче в порядке их использования. Релле нумеруются от 1 !!!
+ 
+
+
+//!!!! it's DEBUG - GPSTRACKER
+scheduler schedulers_arr[]={ 
+  {"Violet task",violet_btn,BUILD_HOUR,BUILD_MIN+6, 5,40000,0,2,1,10,300,1,0,110,1,1,7,8,0,0,0,0,0},
+  {"White task",white_btn,BUILD_HOUR,BUILD_MIN+2,  5,30000,0,2,1,10,300,1,0,110,1,2,7,8,0,0,0,0,0},
+  {"blue task",blue_btn,BUILD_HOUR,BUILD_MIN+3,  -1,15000,0,5,1,10,300,1,0,110,1,3,7,8,0,0,0,0,0},
+  {"green task",green_btn,BUILD_HOUR,BUILD_MIN+4,  5,15000,0,3,1,10,300,1,0,110,1,4,7,8,0,0,0,0,0},
+  {"yellow task",yellow_btn,BUILD_HOUR,BUILD_MIN+5,-1,15000,0,5,1,10,300,1,0,110,1,5,7,8,0,0,0,0,0},
+   {"tempr task",-1,-1,-1,-1,500,0,500,1,30,300,0,0,110,1,6,0,0,0,0,0,0,0},
+   {"Orange task",orange_btn,-1,0,-1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}
 
  /* {"Orange task",-1,-1,-1,0,-1,0}/*,
   {"Water task",water_btn,orange_rel,-1,-1,-1,0,0,&stopInit,&stopStart,&stopExec,&stopFin}*/
   };
  
 #else
-scheduler scheduler_arr[]={
+// !!!! its RELEASE
+scheduler schedulers_arr[]={
+  
+/*
   {"Violet task",violet_btn,10,0,6,v1_2bochki,0,100,1,18,300,1,0,110,1},
   {"White task",white_btn,10,0,7,v1_2bochki,0,100,1,18,300,1,0,110,1},
   {"blue task",blue_btn,10,0,1,v1_2bochki,0,100,1,18,300,1,0,110,1},
   {"green task",green_btn,18,35,-1,v1_3bochki,0,60,1,18,300,1,0,110,1},
   {"yellow task",yellow_btn,18,00,-1,v1_3bochki,0,60,1,18,300,1,0,110,1},
-/*    {"blue task",blue_btn,18,30,-1,v1_3bochki,0,60,1,18,300,1,0,110,1},
-  {"green task",green_btn,10,0,1,v1_2bochki,0,100,1,18,300,1,0,110,1},
 */
-  {"tempr task",-1,-1,-1,-1,                  30000,0,500,1,15,300,0,0,110,1},
-  {"Orange task",orange_btn,-1,0,-1,0,0,0,0,0,0,0,0,0,0}/*,
+  {"teplica close",white_btn,-1,-1,-1,30000,0,500,1,20,300,0,0,110,1,7,1,2,0,0,0,0,0},
+  {"Orange task",orange_btn,-1,0,-1,0,0,0,0,0,0,0,0,0,0,7,1,2,0,0,0,0,0}/*,
   {"Water task",water_btn,orange_rel,-1,-1,-1,0,0,&stopInit,&stopStart,&stopExec,&stopFin}*/
   };
 #endif
@@ -237,9 +257,10 @@ scheduler scheduler_arr[]={
 
 
 
+
 //---------------------------------------------------------------------------
-
-
+// В новой редакции у task нет данных по релле и т.п. => инициализировать по сути нечего
+/*
 class general_init: public general_do
 {
   public:
@@ -252,83 +273,56 @@ class general_init: public general_do
 #endif
 for(int i=0;i<NOFRELAYS;i++)
  {
-   if(x->relays[i])
-    pinMode(relays[i], OUTPUT);
-    digitalWrite(relays[i], HIGH);
+   if(x->relays[i]>0)
+    pinMode(relays[x->relays[i]], OUTPUT);
+    digitalWrite(relays[x->relays[i]], HIGH);
  }
- //   pinMode(x->btn, INPUT);
-//    digitalWrite(x->relay, HIGH);
-    x->stat=0;
-/*    //todo добавление в расписание
-    if(x->StDayofWeek>0)
-     {
-     x->aID=Alarm.alarmRepeat((timeDayOfWeek_t)x->StDayofWeek,x->StHour,x->StMin,0,doalarm);
-     }
-    else
-     {
-     if(x->StHour>0)
-      {
-       x->aID=Alarm.alarmRepeat(x->StHour,x->StMin,0,doalarm);   
-      }
-     } */
-
    }
 } generalInit;
+
+*/
 #ifdef DEBUG_VIOLET_BTN
 int vts=0;
 #endif
-class general_start: public general_do
+class default_start: public general_start   
 {
   public:
-   virtual void handle(task *x) {
+   virtual void start(proc *x) {
     digitalClockDisplay();
-    dprint(x->taskname);dprintln(" started");
-//    if(scheduler_arr[x->schedulerID].StMin>0)  //если задача перманентная то задержка 49 дней (раньше сработает штатная перезагрузка) 
+    dprint(x->currentTask->taskname);dprintln(" started");
+ 
      if(x->currentShed->StMin>=0)  //если задача перманентная то задержка 49 дней (раньше сработает штатная перезагрузка)
      {
         x->finish=x->currentShed->duration+millis();
         pulseCount=0;   //при старте типовой задачи сбрасываем датчик воды
-#ifdef DEBUG_VIOLET_BTN
-dprint("Alarm count: ");dprintln(Alarm.count());
-#endif  
-     if(Alarm.count()<NOFALARMS)
-      {
-      x->aID=-1;
-      x->currentShed->aID=-1;
-   //   x->schedulerID=-1;
-#ifdef DEBUG_VIOLET_BTN
-int ia;
-ia=getnextscheduler();
-dprint("Next Alarm id: ");dprintln(ia);
-bindShedulertoAlarm(ia);
-dprint("Alarm count: ");dprintln(Alarm.count());
-#else
-bindShedulertoAlarm(getnextscheduler());
-#endif     
-      
-    
-      }
+
      }
-       else
+       else//если задача перманентная то задержка 49 дней (раньше сработает штатная перезагрузка)
         {
         x->finish=4294967290;
         }
+#ifdef DEBUG_PLUS
+dprintln("x->finish set to"+String(x->finish));
+#endif 
     for(int i=0;i<NOFRELAYS;i++)
      {
-      if(x->relays[i])
-        digitalWrite(relays[i],LOW);
-     }
-  //  digitalWrite(x->relay,LOW);
- //   digitalWrite(lightgreen_rel,LOW);
-  //  digitalWrite(brown_rel,LOW);
-    x->stat=1;
-   }
-} generalStart;
+      if(x->currentShed->relays[i]>0)
+       {
+#ifdef DEBUG_PLUS
+dprintln("try to start rellay"+String(x->currentShed->relays[i]));
+#endif 
+       
 
-class general_exec: public general_do
+        digitalWrite(relays[x->currentShed->relays[i]-1],LOW);
+       }
+     }
+   }
+} defaultStart;
+
+class default_exec: public general_do
 {
   public:
-   virtual void handle(task *x) {
+   virtual void handle(proc *x) {
 
 bool sens=true;
     for(int i=0;i<NOFSENSORS;i++)
@@ -356,13 +350,13 @@ bool sens=true;
      {
      for(int i=0;i<NOFRELAYS;i++)
      {
-      if(x->relays[i])
-        digitalWrite(relays[i],LOW);
+      if(x->currentShed->relays[i]!=0)
+        digitalWrite(relays[x->currentShed->relays[i]-1],LOW);
      }
      if(x->interruped!=0)
       {
        digitalClockDisplay();
-       dprint(x->taskname);dprintln(" resume"); 
+       dprint(x->currentShed->taskname);dprintln(" resume"); 
        dprint("sensors: ");
        print_sensors();
       x->interruped=0;
@@ -375,23 +369,23 @@ bool sens=true;
         
        
         if(x->currentShed->finish==0 && (!x->interruped))
-         {
+         {                                                            //если это перманентная задача
           x->currentShed->finish=millis()+x->currentShed->duration;  //то duration это задержка отключения после выхода датчика из диапазона
          }
        }
 
-     //  Serial.println(scheduler_arr[x->schedulerID].finish-millis());
+     //  Serial.println(schedulers_arr[x->schedulerID].finish-millis());
       if( (x->currentShed->finish<millis() && x->currentShed->StMin<0)|| x->currentShed->StMin>=0) // если вышло время задержки или задача не перманентная - выключаем реле
-       {    
+       {                                                                                           // в порядке указанном при инициализации задачи
        for(int i=0;i<NOFRELAYS;i++)
         {
-        if(x->relays[i])
-        digitalWrite(relays[i],HIGH);
+        if(x->currentShed->relays[i]!=0)
+        digitalWrite(relays[x->currentShed->relays[i]-1],HIGH);
         }
        if(!x->interruped)
         {
        digitalClockDisplay();
-       dprint(x->taskname);dprintln(" interruped"); 
+       dprint(x->currentTask->taskname);dprintln(" interruped"); 
        dprint("sensors: ");
        print_sensors();
       x->interruped=1;
@@ -403,48 +397,77 @@ bool sens=true;
       }
      }
    }
-} generalExec;
+} defaultExec;
 
-class general_fin: public general_do
+class default_stop: public general_stop
 {
   public:
-   virtual void handle(task *x) {
-    if(x->stat!=0)
+   virtual void stop(proc *x) {
+    if(x->milstart!=0)
      {
 #ifdef DEBUG_VIOLET_BTN
-   if(x->taskname.equals("Violet task"))
+   if(x->currentShed->taskname.equals("Violet task"))
     {
       vts=0;      
     }
 #endif
-    digitalClockDisplay();
-    dprint(x->taskname);dprintln(" stoped");
-    print_sensors();
-    for(int i=0;i<NOFRELAYS;i++)
-     {
-      if(x->relays[i])
-        digitalWrite(relays[i],HIGH);
-     }
-    x->stat=0;
+      digitalClockDisplay();
+      dprint(x->currentShed->taskname);dprintln(" stoped");
+      print_sensors();
+      for(int i=0;i<NOFRELAYS;i++)
+        {
+        if(x->currentShed->relays[i]!=0)
+          digitalWrite(relays[x->currentShed->relays[i]-1],HIGH);
+        }
      }
    }
-} generalFin;
+} defaultStop;
 
+void general_start::handle(proc *x)
+{
+  this->start(x);
+  x->milstart=millis();  
+#ifdef DEBUG_VIOLET_BTN
+dprint("Alarm count: ");dprintln(Alarm.count());
+#endif  
+     if(Alarm.count()<NOFALARMS)
+      {
+      x->currentShed->aID=-1;
+#ifdef DEBUG_PLUS
+int ia;
+ia=getnextscheduler();
+dprint("Next Alarm id: ");dprintln(ia);
+bindShedulertoAlarm(ia);
+dprint("Alarm count: ");dprintln(Alarm.count());
+#else
+      bindShedulertoAlarm(getnextscheduler());
+#endif     
+      }
+}
+
+void general_stop::handle(proc *x)
+{
+ 
+   this->stop(x);
+   x->currentShed=NULL;
+   x->aID=-1;
+   x->milstart=0;
+}
 //------------------------------------------------------------------------------
-class stop_init: public general_do
+/*class stop_init: public general_do
 {
   public:
    virtual void handle(task *x) {
   
    }
-} stopInit;
+} stopInit;*/
 
-class stop_start: public general_do
+class stop_start: public general_start
 {
   public:
-   virtual void handle(task *x) {
+   virtual void start(proc *x) {
     digitalClockDisplay();
-    dprint(x->taskname);dprintln(" emergancy STOP");
+    dprintln(" emergancy STOP");
     emergency_stop();
    }
 } stopStart;
@@ -452,15 +475,15 @@ class stop_start: public general_do
 class stop_exec: public general_do
 {
   public:
-   virtual void handle(task *x) {
+   virtual void handle(proc *x) {
 
    }
 } stopExec;
 
-class stop_fin: public general_do
+class stop_fin: public general_stop
 {
   public:
-   virtual void handle(task *x) {
+   virtual void stop(proc *x) {
 
    }
 } stopFin;
@@ -471,111 +494,173 @@ class stop_fin: public general_do
 //----------------------------------------------------------------------------
 
 
+proc::proc()
+{
+  interruped=0;
+  aID=-1;
+  milstart=0;
+  finish=0;
+  currentTask=NULL;
+  currentShed=NULL;
+}
 
+proc procs_arr[NOFPROCS];
 
+int getfreeproc()  //ищем свободный процесс 
+{
+  int freeproc=-1;
+  for(int i=0;i<NOFPROCS;i++)
+   {
+#ifdef DEBUG_PLUS   
+dprintln("i:"+String(i)+" procs_arr[i].milstart:"+String(procs_arr[i].milstart));
+#endif
+    if(procs_arr[i].milstart==0)
+     {
+      freeproc=i;
+      break;
+     }
+   }
+   return(freeproc);
+}
 
-
-
-task::task(String _taskname,general_do * _init,general_do * _start,general_do * _exec,general_do * _fin,byte _r0,byte _r1,byte _r2,byte _r3,byte _r4,byte _r5,byte _r6,byte _r7)
-   :taskname(_taskname),init(_init),start(_start),exec(_exec),fin(_fin)
+task::task(String _taskname,general_start * _start,general_do * _exec,general_stop * _fin)
+   :taskname(_taskname),start(_start),exec(_exec),fin(_fin)
 {
 #ifdef DEBUG_PLUS
 dprintln("--------------------init--------------"); 
 #endif
-aID=-1;
-//schedulerID=-1;
-currentShed=NULL;
-interruped=0;
-relays[0]=_r0;relays[1]=_r1;relays[2]=_r2;relays[3]=_r3;relays[4]=_r4;relays[5]=_r5;relays[6]=_r6;relays[7]=_r7;
 }
 
-void task::check()
-{
-
+void proc::check()
+{  //проверяем не закончилось ли время работы процесса
+if(finish>0)
+ {
     if(finish>millis())
      {
-#ifdef DEBUG_MINUS
-dprintln(finish-millis());
+      currentTask->exec->handle(this);
+#ifdef DEBUG_LOOP
+dprintln("exec done");
 #endif
-      exec->handle(this);
- 
      }
     else
      {
-      fin->handle(this);
+      currentTask->fin->handle(this);
      }
-   
+ } 
 }
 //int relays[]={violet_rel,white_rel,blue_rel,green_rel,yellow_rel,orange_rel,brown_rel,lightgreen_rel};
 
 
 task tasks_arr[]={
-  {"Violet task",&generalInit,&generalStart,&generalExec,&generalFin,1,0,0,0,0,0,1,1},
-  {"White task",&generalInit,&generalStart,&generalExec,&generalFin,0,1,0,0,0,0,1,1},
-  {"blue task",&generalInit,&generalStart,&generalExec,&generalFin,0,0,1,0,0,0,1,1},
-  {"green task",&generalInit,&generalStart,&generalExec,&generalFin,0,0,0,1,0,0,1,1},
-  {"yellow task",&generalInit,&generalStart,&generalExec,&generalFin,0,0,0,0,1,0,1,1},
-  {"Orange task",&stopInit,&stopStart,&stopExec,&stopFin,0,0,0,0,0,0,0,0}
+  {"Violet task",&defaultStart,&defaultExec,&defaultStop},
+  {"teplica close",&defaultStart,&defaultExec,&defaultStop},
+  {"blue task",&defaultStart,&defaultExec,&defaultStop},
+  {"green task",&defaultStart,&defaultExec,&defaultStop},
+  {"yellow task",&defaultStart,&defaultExec,&defaultStop},
+  {"Orange task",&stopStart,&stopExec,&stopFin}
   ,
-  {"tempr task",&generalInit,&generalStart,&generalExec,&generalFin,0,0,0,0,0,1,0,0}
+  {"tempr task",&defaultStart,&defaultExec,&defaultStop}
   };
  
-int getnextscheduler()
+int getnextscheduler()   //Ищем ближайший по времени scheduler 
 {
   
-  //time_t value = (DOW-1) * SECS_PER_DAY + AlarmHMS(H,M,S);
-  //nextTrigger = value + nextSunday(time);
-  //nextTrigger = value + previousMidnight(time);
-int nexttask=-1;
+int nextscheduler=-1;
 int j=0;
 time_t ntime = now();
 time_t tt;
 time_t ct=now()+8*SECS_PER_DAY;
   for (int i=0;i<NOFSCHEDULER;i++) 
   {
-  
-  for (j=0;j<NOFTASKS;j++)
+ /* for (j=0;j<NOFTASKS;j++)
    {
-    if(tasks_arr[j].taskname.equals(scheduler_arr[i].taskname)) 
+    if(tasks_arr[j].taskname.equals(schedulers_arr[i].taskname)) 
      break;
    }
-   if(scheduler_arr[i].StMin>=0 && scheduler_arr[i].StHour>=0) //Только если не перманентная задача
+ */  
+   if(schedulers_arr[i].StMin>=0 && schedulers_arr[i].StHour>=0) //Только если не перманентный scheduler
     {
-    if((scheduler_arr[i].aID<0) && (tasks_arr[j].aID<0))
+    if((schedulers_arr[i].aID<0)  /*&& (tasks_arr[j].aID<0)  */)
      {
-      if(scheduler_arr[i].StDayofWeek>0)
+      if(schedulers_arr[i].StDayofWeek>0)
        {
-        tt=previousSunday(ntime)+(scheduler_arr[i].StDayofWeek-1) * SECS_PER_DAY + AlarmHMS(scheduler_arr[i].StHour,scheduler_arr[i].StMin,0);
+        tt=previousSunday(ntime)+(schedulers_arr[i].StDayofWeek-1) * SECS_PER_DAY + AlarmHMS(schedulers_arr[i].StHour,schedulers_arr[i].StMin,0);
         if(tt<=ntime)
          {
-          tt=nextSunday(ntime)+(scheduler_arr[i].StDayofWeek-1) * SECS_PER_DAY + AlarmHMS(scheduler_arr[i].StHour,scheduler_arr[i].StMin,0);
+          tt=nextSunday(ntime)+(schedulers_arr[i].StDayofWeek-1) * SECS_PER_DAY + AlarmHMS(schedulers_arr[i].StHour,schedulers_arr[i].StMin,0);
          }
        }
       else
        {
-        tt=previousMidnight(ntime)+AlarmHMS(scheduler_arr[i].StHour,scheduler_arr[i].StMin,0);
+        tt=previousMidnight(ntime)+AlarmHMS(schedulers_arr[i].StHour,schedulers_arr[i].StMin,0);
                 if(tt<=ntime)
          {
-           tt=nextMidnight(ntime)+AlarmHMS(scheduler_arr[i].StHour,scheduler_arr[i].StMin,0);
+           tt=nextMidnight(ntime)+AlarmHMS(schedulers_arr[i].StHour,schedulers_arr[i].StMin,0);
          }
        }
       if(tt<ct)
        {
         ct=tt;
-        nexttask=i;
+        nextscheduler=i;
        }
      }
     }
   }
 #ifdef DEBUG_PLUS
 dprint("got next scheduler");
-dprintln(nexttask);
+dprintln(nextscheduler);
 #endif    
-  return(nexttask);
+  return(nextscheduler);
 }
-
+int startnewproc(scheduler *nsched)
+{
+  
+int i;
+int procid=-1;
+            for(i=0;i<NOFPROCS;i++)
+            {
+               if(procs_arr[i].currentShed==nsched)  //есть процесс с этим scheduler 
+                break;
+            }
+            if(i>=NOFPROCS)
+             {
+             procid=getfreeproc();
+             if(procid>=0) //есть свободный процесс
+              {
+              procs_arr[procid].currentShed=nsched;
+              for(task & ntask :tasks_arr)
+               {
+                if(ntask.taskname.equals(nsched->taskname))
+                  {
+                  procs_arr[procid].currentTask=&ntask;
+                  break;
+                  }
+               }
+              procs_arr[procid].milstart=millis();
+              procs_arr[procid].currentTask->start->handle(&procs_arr[procid]); 
+#ifdef DEBUG_PLUS
+dprintln("New proc started"+String(procid));
+#endif              
+              }
+             else
+              {
+              dprint("No free proc for task:"+nsched->taskname+" scheduler id:"+String(i));
+              }
+  //           ntask.start->handle(&ntask);
+//            break;
+            }
+           else
+            {
+             dprint("scheduler id:"+String(id)+" already running");
+             procid=i;
+            }
+return(procid);
+}
 void scheduler::check()
 {
+  
+// Need revision!!!
+
   if(btn>0)
   {
 #ifdef DEBUG_VIOLET_BTN
@@ -584,31 +669,27 @@ void scheduler::check()
     {
       vts++;
 #else 
-   if(digitalRead(btn)==HIGH)
+   if(digitalRead(btn)==HIGH && millis()>btnHIGHmillis+BTNTRIM)
    {
 #endif
 #else
-  if(digitalRead(btn)==HIGH)
+  if(digitalRead(btn)==HIGH && millis()>btnHIGHmillis+BTNTRIM)
    {
 #endif
-   
-    for (task & ntask : tasks_arr)
+    byte isrun=0;
+    btnHIGHmillis=millis();
+    for (proc & nproc : procs_arr)
      {
-       if(ntask.taskname.equals(taskname))
+       if(this==nproc.currentShed)  //если есть процесс с этим scheduler который то останавливаем процесс
         {
-        if(ntask.aID>=0)
-         {
-#ifdef DEBUG_VIOLET_BTN
-dprintln(aID);
-dprintln(ntask.aID);
-#endif          
-         Alarm.free(aID);
-         ntask.aID=-1;
-         aID=-1;   
-         }
-        ntask.currentShed=this;
-        ntask.start->handle(&ntask);  
+        isrun++;
+        nproc.currentTask->fin->handle(&nproc);
         }
+     }
+   // Если все процессы перебрали и не нашли запускаем новый
+    if(isrun==0)
+     {
+      startnewproc(this);
      }
    }
   }
@@ -616,53 +697,54 @@ dprintln(ntask.aID);
 
 int bindShedulertoAlarm(int id)
 {
+  
+if(id>=0)
+ {
   int aID=-1;
-   for (task & ntask : tasks_arr)
-    {
-      if(ntask.aID<0)
-       {
-        if(ntask.taskname.equals(scheduler_arr[id].taskname))
-         {
-          if(scheduler_arr[id].StDayofWeek>0)
+           if(schedulers_arr[id].StDayofWeek>0)
            {
-            aID=Alarm.alarmOnce((timeDayOfWeek_t)scheduler_arr[id].StDayofWeek,scheduler_arr[id].StHour,scheduler_arr[id].StMin,0,doalarm);
+            aID=Alarm.alarmOnce((timeDayOfWeek_t)schedulers_arr[id].StDayofWeek,schedulers_arr[id].StHour,schedulers_arr[id].StMin,0,doalarm);
           }
           else
           {
-          aID=Alarm.alarmOnce(scheduler_arr[id].StHour,scheduler_arr[id].StMin,0,doalarm);
+          aID=Alarm.alarmOnce(schedulers_arr[id].StHour,schedulers_arr[id].StMin,0,doalarm);
           }
 #ifdef DEBUG_PLUS
-dprint("Set ");
-dprint(ntask.taskname);
+dprint("Set scheduler:");
+dprint(id );
+dprint(" task:");
+dprint(schedulers_arr[id].taskname);
 dprint(" on:");
 digitalClockDisplay(Alarm.getNextTrigger(aID));
 #endif     
-        scheduler_arr[id].aID=aID;
-        ntask.aID=aID;
-        ntask.currentShed=&scheduler_arr[id];
-  //      ntask.schedulerID=id;
-        break;
-         }
-        }
-    }
+        schedulers_arr[id].aID=aID;
+
    return(aID);
+ }
+else
+ {
+  return(-1);
+ }
 }
 
 #define USE_SPECIALIST_METHODS
 void emergency_stop()
 {
-    for (task & ntask : tasks_arr) 
+  
+//need revision !!!
+
+    for (proc & nproc : procs_arr) 
      {
-     ntask.finish=0;
-     ntask.fin->handle(&ntask);
+     nproc.finish=0;
+     nproc.currentTask->fin->handle(&nproc);
      }
 
-    for (task & ntask : tasks_arr) 
+     for (proc & nproc : procs_arr) 
      {
-     if(ntask.aID>=0)
+     if(nproc.aID>=0)
       {
-     dprint(ntask.aID);dprint(" "); dprint(ntask.taskname);dprint(" ");dprint(Alarm.read(ntask.aID));dprint(" ");
-     digitalClockDisplay(Alarm.read(ntask.aID),1);
+     dprint(nproc.aID);dprint(" "); dprint( nproc.currentTask->taskname);dprint(" ");dprint(Alarm.read(nproc.aID));dprint(" ");
+     digitalClockDisplay(Alarm.read(nproc.aID),1);
       }
      }
   setTimefromGPS(60000);
@@ -673,13 +755,15 @@ void doalarm()
     {
      int id;
       id=Alarm.getTriggeredAlarmId();
-       for (task & ntask : tasks_arr) 
+      int i;
+       for (scheduler & nsched : schedulers_arr) 
         {
-          if(ntask.aID==id)
+          if(nsched.aID==id)  
            {
-            ntask.start->handle(&ntask);
+            startnewproc(&nsched);
+            break;
+
            }
-           
         }
     }
 byte pushbuffer=0;
@@ -710,8 +794,7 @@ if(file)
   
 }*/
 
-
-SerialBT.begin("poliv");
+SerialBT.begin("provetrivanie");
 dht.begin();
 SerialBT.register_callback(btCallback);
 int i;
@@ -741,7 +824,7 @@ setTime(setTimefromGPS(60*30*1000));
 setSyncProvider(CsetTimefromGPS);
 setSyncInterval(TIME_UPDATE);
 // Иницализируем задачи
-for (task & ntask : tasks_arr) ntask.init->handle(&ntask);
+// Устарело for (task & ntask : tasks_arr) ntask.init->handle(&ntask);
 // Устанавливаем таймеры
 for(int i=0;i<NOFALARMS;i++)
  {
@@ -749,28 +832,27 @@ for(int i=0;i<NOFALARMS;i++)
  }
 for (i=0;i<NOFSCHEDULER;i++) 
  {
-  if(scheduler_arr[i].StMin<0)  // ищем и запускаем перманентные задачи
+  if(schedulers_arr[i].StMin<0 && schedulers_arr[i].StHour<0)  // ищем и запускаем перманентные задачи
    {
-    for (task & ntask : tasks_arr) 
-     {
-      if(ntask.taskname.equals(scheduler_arr[i].taskname))
-       {
-   //     ntask.schedulerID=i;
-        ntask.currentShed=&scheduler_arr[i];
-        ntask.start->handle(&ntask); 
-        scheduler_arr[i].finish=0; 
-       }
-     }
+   startnewproc(&schedulers_arr[i]);
    }
  }
+#ifdef DEBUG_PLUS
+dprintln("Procs compleate");
+#endif 
 //Подключаем расходомер
 pinMode(water_btn, INPUT_PULLUP);
 attachInterrupt(digitalPinToInterrupt(water_btn), pulseCounter, FALLING);
+#ifdef DEBUG_PLUS
+dprintln("rashod attached");
+#endif 
+
 //Сбрасываем значения датчиков в неопределено 
  for(int i=0;i<NOFSENSORS;i++)
   {
     sensors[i]=-10001;
   }
+  dprintln("Setup complite");
 }
 
 
@@ -786,27 +868,16 @@ unsigned long st=millis();
  tmElements_t tm;
  time_t tt;
  print_sensors();
-/*if(gps.date.year()>=2022)
- {
- dprint("Now is: ");
- digitalClockDisplay();
- }*/
 #ifdef NOGPSDEBUG
-//setTime(NOGPS_DATE);
  tm.Year=nogpsdate[nogps_i][5]-1970;
  tm.Month=nogpsdate[nogps_i][4];
  tm.Day=nogpsdate[nogps_i][3];
  tm.Hour=nogpsdate[nogps_i][0];
  tm.Minute=nogpsdate[nogps_i][1];
  tm.Second=nogpsdate[nogps_i][2];
- 
-
   tt=makeTime(tm)+(offset * SECS_PER_HOUR);
   nogps_i++;
- //setTime(tt+offset * SECS_PER_HOUR);
-// Alarm.delay(1000);
- dprint("Set DEBUG Time ");
-
+  dprint("Set DEBUG Time ");
 #else
    do
   {
@@ -822,16 +893,6 @@ unsigned long st=millis();
       return(0);
   }
  while (((!gps.location.isValid()) || (gps.date.year()<2022) || (gps.location.age()>1000)));
- //unsigned long age;
- //int Year;
- //byte Month, Day, Hour, Minute, Second;
-
-/* Year=gps.date.year();
- Month=gps.date.month();
- Day=gps.date.day();
- Hour=gps.time.hour();
- Minute=gps.time.minute();
- Second=gps.time.second();*/
  tm.Year=gps.date.year()-1970;
  tm.Month=gps.date.month();
  tm.Day=gps.date.day();
@@ -840,9 +901,6 @@ unsigned long st=millis();
  tm.Second=gps.time.second();
  //age=gps.time.age();
  tt=makeTime(tm)+offset * SECS_PER_HOUR;;
-
- //setTime(t);
- // Alarm.delay(1000);
  dprint("Got time from GPS ");
  #endif
   digitalClockDisplay(tt);
@@ -862,9 +920,23 @@ void loop() {
 #endif
    gps.encode(g);
    }
- refresh_sensors();
- for (task & ntask : tasks_arr) ntask.check();  // непрерывно запускаем check по всем задачам
- for (scheduler & nscheduler : scheduler_arr) nscheduler.check();  // непрерывно запускаем check по всему рассписанию
+
+#ifdef DEBUG_LOOP
+ dprintln("gps decoded");
+#endif
+refresh_sensors();
+#ifdef DEBUG_LOOP
+ dprintln("Sensors checked");
+#endif
+ for (proc & nproc : procs_arr) nproc.check();  // непрерывно запускаем check по всем процессам
+  #ifdef DEBUG_LOOP
+ dprintln("Proc.check() complit");
+ #endif
+
+ for (scheduler & nscheduler : schedulers_arr) nscheduler.check();  // непрерывно запускаем check по всему рассписанию
+ #ifdef DEBUG_LOOP
+ dprintln("shheduler check complit");
+ #endif
 
  if(pushbuffer==1)   //при подключении bluetooth Serial выводим в порт log, расписание и т.п.
   {
@@ -873,23 +945,7 @@ void loop() {
   for (index_t i = 0; i < buffer.size()-2; i++) {
      SerialBT.print((char)buffer[i]);
      }
-   for (int j = 0; j < 6; j++) {
-    int k=0;
-    for (task & ntask : tasks_arr) 
-     {
-      if(ntask.aID==j)
-       {
-        dprint(ntask.aID);dprint(" "); dprint(ntask.taskname);dprint(" ");digitalClockDisplay(Alarm.getNextTrigger(j),0);dprint(" ");
-        k=1;
-        break;
-       }
-     }
-    if(k==0)
-      {
-       dprint(j);dprint(" ");digitalClockDisplay(Alarm.getNextTrigger(j),0);
-      }
-      k=0;
-     }
+
 //   float hp = dht.readHumidity();
 //   float tp = dht.readTemperature();
    dprint("Volume:");  dprint(String(sensors[Vol]));
@@ -899,9 +955,9 @@ void loop() {
 if(millis()>mill_restart) 
  {
   byte rst=1;
-   for (task & ntask : tasks_arr) 
+   for (proc & nproc : procs_arr) 
     {
-    if(ntask.finish>millis()) rst=0;   
+    if(nproc.finish>millis() && nproc.currentShed->StMin>=0) rst=0;   
     }
   if(rst) ESP.restart();  //если вдруг все долго работает без перезагрузок, и нет запущенных задач то лучше бы перезагрузиться
  }

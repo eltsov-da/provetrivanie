@@ -1,20 +1,22 @@
-
 class general_do;
-
-class scheduler
+class general_start;
+class general_stop;
+class scheduler   // содержит в себе все условия запуска и остановки задачи taskname
 {
    public:
-  scheduler(String,int8_t,int8_t,int8_t,int8_t,unsigned long,float,float,int8_t,float,float,int8_t,float,float,int8_t);
+  scheduler(String,int8_t,int8_t,int8_t,int8_t,unsigned long,float,float,int8_t,float,float,int8_t,float,float,int8_t,byte,byte,byte,byte,byte,byte,byte,byte);
   String taskname;
   int8_t StHour;
   int8_t StMin;
   int8_t StDayofWeek;
   unsigned long duration;
   int8_t btn; 
+  unsigned long btnHIGHmillis=0; 
   float startD[3];
   float stopD[3];
   byte orderD[3];
     void check();
+   byte relays[8];
 /*  float startT;
   float stopT;
   byte orderT;*/
@@ -23,35 +25,36 @@ class scheduler
   int aID;
 };
 
-class task
+
+
+class task    // просто связка имени и трех функций start, exec , stop
 {
   public:
-  task(String,general_do *,general_do *,general_do *,general_do *,byte,byte,byte,byte,byte,byte,byte,byte);
+  task(String,general_start *,general_do *,general_stop *);
  /* void init();
   void start();
   void exec();
   void fin();*/
-  void check();
+  
   String taskname;
-//  int btn;
-//  int relay;
-  byte relays[8];
-/*  int8_t StHour;
-  int8_t StMin;
-  int8_t StDayofWeek;
-  unsigned long duration;
-  float volume;
-  float startT;
-  float stopT;
-  byte orderT;*/
-  unsigned long finish;
-  general_do * init;
-  general_do * start;
+//  general_do * init;
+  general_start * start;
   general_do * exec;
-  general_do * fin;
-  byte interruped;
-  byte stat;
-  int aID;
+  general_stop * fin;
+
 //  int schedulerID;
+
+};
+
+class proc    // Объект для запущеной задачи от конкретного scheduler
+{
+  public:
+  proc();
+  task *currentTask;
   scheduler *currentShed;
+  byte interruped;
+  int aID;
+  unsigned long milstart;
+  unsigned long finish;
+  void check();
 };
