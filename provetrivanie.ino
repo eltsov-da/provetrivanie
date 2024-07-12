@@ -12,6 +12,7 @@
 //#define DEBUG_VIOLET_BTN
 //#define GPSTRACKER
 #define BTNTRIM 1000
+#define PERMANENT_DURATION 4294967290
 #define NOGPS_DATE 0,9,9,16,07,2022
 #ifdef NOGPSDEBUG
 unsigned nogpsdate[][6] = {{23,57,9,15,07,2022},{23,57,10,15,07,2022},{23,59,9,15,07,2022},{0,1,9,16,07,2022},{0,3,9,16,07,2022},{0,5,9,16,07,2022},{0,7,9,16,07,2022},{0,9,9,16,07,2022}};
@@ -22,8 +23,9 @@ int nogps_i=0;
 #else
 #define TIME_UPDATE 3600
 #endif 
-#define water_btn 21
+#define water_btn 25
 #define tempr_btn 22
+
 #define orange_btn 13
 #define yellow_btn 39
 #define green_btn 34
@@ -39,13 +41,16 @@ int nogps_i=0;
 #define blue_rel 14
 #define white_rel 27
 #define violet_rel 26
+#define red_rel 21
+#define cyan_rel 23
 #define NOFRELAYS sizeof(relays)/sizeof(relays[0])
 #define NOFPROCS 10
 
 unsigned long mill_restart=400000000;   //интервал автоматической перезагрузки
-int relays[]={violet_rel,white_rel,blue_rel,green_rel,yellow_rel,orange_rel,brown_rel,lightgreen_rel};
+int relays[]={violet_rel,white_rel,blue_rel,green_rel,yellow_rel,red_rel,orange_rel,brown_rel,lightgreen_rel,cyan_rel};
 #define NOFBTNS sizeof(btns)/sizeof(btns[0])
 int btns[]={violet_btn,white_btn,blue_btn,green_btn,yellow_btn,orange_btn/*,water_btn*/};
+String btcmd="";
 float sensors[3];  // Значения татчиков
 String sensorsname[3]={"Volume","Temperature","Humidity"};  //Названия датчиков
 float sensors_delta[3]={0,0.5,0.5};  // Сдвиг интервала включения/выключения чтобы избежать дребизга
@@ -75,7 +80,7 @@ time_t prevDisplay = 0;
 
 AlarmId id;
 
-#include <CircularBuffer.h>
+#include <CircularBuffer.hpp>
 
 CircularBuffer<char, 1200> buffer;
 
@@ -178,8 +183,8 @@ void digitalClockDisplay(time_t t,byte log=1){
  
 
 //---------------------------------------------------------------------------
-scheduler::scheduler(String _taskname,int8_t _btn,int8_t _StHour,int8_t _StMin,int8_t _StDayofWeek,unsigned long _duration,float _startV,float _stopV,int8_t _orderV,float _startT,float _stopT,int8_t _orderT,float _startH,float _stopH,int8_t _orderH,byte _r0,byte _r1,byte _r2,byte _r3,byte _r4,byte _r5,byte _r6,byte _r7)
-   :taskname(_taskname),btn(_btn),StHour(_StHour),StMin(_StMin),StDayofWeek(_StDayofWeek),duration(_duration)
+ scheduler::scheduler(String _schedulername,String _taskname,int8_t _btn,int8_t _StHour,int8_t _StMin,int8_t _StDayofWeek,unsigned long _duration,unsigned long _interval,unsigned long _preexitdelay,float _startV,float _stopV,int8_t _orderV,float _startT,float _stopT,int8_t _orderT,float _startH,float _stopH,int8_t _orderH,byte _r0,byte _r1,byte _r2,byte _r3,byte _r4,byte _r5,byte _r6,byte _r7,byte _r8,byte _r9)
+   :schedulername(_schedulername),taskname(_taskname),btn(_btn),StHour(_StHour),StMin(_StMin),StDayofWeek(_StDayofWeek),duration(_duration),interval(_interval),preexitdelay(_preexitdelay)
 {
 byte trelays[NOFRELAYS];
 startD[0]=_startV;
@@ -193,14 +198,16 @@ stopD[2]=_stopH;
 orderD[2]=_orderH;
 aID=-1; 
 finish=0;
-trelays[0]=_r0;trelays[1]=_r1;trelays[2]=_r2;trelays[3]=_r3;trelays[4]=_r4;trelays[5]=_r5;trelays[6]=_r6;trelays[7]=_r7;
+trelays[0]=_r0;trelays[1]=_r1;trelays[2]=_r2;trelays[3]=_r3;trelays[4]=_r4;trelays[5]=_r5;trelays[6]=_r6;trelays[7]=_r7;trelays[8]=_r8;trelays[9]=_r9;
 for(int i=0;i<NOFRELAYS;i++)
  {
   if(trelays[i]!=0)
    {
-    relays[trelays[i]]=i;
+ //   relays[trelays[i]-1]=i+1;
+ relays[i]=trelays[i];
    }
  }
+ laststop=0;
 }
 
 #define NOFALARMS 5
@@ -217,7 +224,7 @@ for(int i=0;i<NOFRELAYS;i++)
 #define baseH 19
 #define baseM 00
 //int btns[]={violet_btn,white_btn,blue_btn,green_btn,yellow_btn,orange_btn/*,water_btn*/};
-//task name, button, start Hour, Start Min,Start day of week (Sinday =1),Duration,start volume,stop volume,side of interval,start tempr,stop tempr,sire of tempr interval,start hum,stop hum,side of hum interval,
+//scheduler nme,task name, button, start Hour, Start Min,Start day of week (Sinday =1),Duration,pre exit delay,start volume,stop volume,side of interval,start tempr,stop tempr,sire of tempr interval,start hum,stop hum,side of hum interval,
 //side of interval 1 - between start and stop 0 - outside start and stop
 // последние 8 цифр это номера релле используемые в задаче в порядке их использования. Релле нумеруются от 1 !!!
  
@@ -240,7 +247,7 @@ scheduler schedulers_arr[]={
 #else
 // !!!! its RELEASE
 scheduler schedulers_arr[]={
-  
+//  
 /*
   {"Violet task",violet_btn,10,0,6,v1_2bochki,0,100,1,18,300,1,0,110,1},
   {"White task",white_btn,10,0,7,v1_2bochki,0,100,1,18,300,1,0,110,1},
@@ -248,9 +255,49 @@ scheduler schedulers_arr[]={
   {"green task",green_btn,18,35,-1,v1_3bochki,0,60,1,18,300,1,0,110,1},
   {"yellow task",yellow_btn,18,00,-1,v1_3bochki,0,60,1,18,300,1,0,110,1},
 */
-  {"teplica close",white_btn,-1,-1,-1,30000,0,500,1,20,300,0,0,110,1,7,1,2,0,0,0,0,0},
-  {"Orange task",orange_btn,-1,0,-1,0,0,0,0,0,0,0,0,0,0,7,1,2,0,0,0,0,0}/*,
-  {"Water task",water_btn,orange_rel,-1,-1,-1,0,0,&stopInit,&stopStart,&stopExec,&stopFin}*/
+#define CMD_BTN 100
+/*String _schedulername,        название расписание
+String _taskname,               название задачи
+int8_t _btn,                    кнопка запуска
+int8_t _StHour,                 час старта
+int8_t _StMin,                  минута старта
+int8_t _StDayofWeek,            день недели старта (если -1 то каждый день) ?
+unsigned long _duration,        время работы задачи
+unsigned long _interval,        минимальный интервал между остановкой и запуском
+unsigned long _preexitdelay,    задержка перед выходом?
+float _startV,                  начало интервала значения датчика воды 
+float _stopV,                   конец интервала значения датчика воды 
+int8_t _orderV,                 задача работает пока значение объема воды внутри или вне интервала 0,1 соответсвенно
+float _startT,
+float _stopT,
+int8_t _orderT,
+float _startH,
+float _stopH,
+int8_t _orderH,
+byte _r0,byte _r1,byte _r2,byte _r3,byte _r4,byte _r5,byte _r6,byte _r7   */
+// relay 1,2 switch close, open
+// 3,4,5 - open
+//6,7,8 - close
+  {"close all","pnevmo",orange_btn,-1,-1,-1,30000,0,0,/*volume*/-10,500,1,/*tempr*/-100,300,1,/*hym*/0,110,1, /*relays*/1,9,5,8,4,7,3,10,6,0},
+  {"open E","pnevmo",white_btn,-1,-1,-1,30000,0,0,/*volume*/-10,500,1,/*tempr*/-100,300,1,/*hym*/0,110,1,/*relays*/2,5,9,0,0,0,0,0,0,0},
+  {"open W","pnevmo",blue_btn,-1,-1,-1,30000,0,0,/*volume*/-10,500,1,/*tempr*/-100,300,1,/*hym*/0,110,1,/*relays*/2,8,4,0,0,0,0,0,0,0},
+  {"open S","pnevmo",green_btn,-1,-1,-1,30000,0,0,/*volume*/-10,500,1,/*tempr*/-100,300,1,/*hym*/0,110,1,/*relays*/2,7,3,0,0,0,0,0,0,0},
+  {"open N","pnevmo",yellow_btn,-1,-1,-1,30000,0,0,/*volume*/-10,500,1,/*tempr*/-100,300,1,/*hym*/0,110,1,/*relays*/2,10,6,0,0,0,0,0,0,0},
+  {"close E","pnevmo",CMD_BTN,-1,-1,-1,30000,0,0,/*volume*/-10,500,1,/*tempr*/-100,300,1,/*hym*/0,110,1,/*relays*/1,9,5,0,0,0,0,0,0,0},
+  {"close W","pnevmo",CMD_BTN,-1,-1,-1,30000,0,0,/*volume*/-10,500,1,/*tempr*/-100,300,1,/*hym*/0,110,1,/*relays*/1,8,4,0,0,0,0,0,0,0},
+  {"close S","pnevmo",CMD_BTN,-1,-1,-1,30000,0,0,/*volume*/-10,500,1,/*tempr*/-100,300,1,/*hym*/0,110,1,/*relays*/1,7,3,0,0,0,0,0,0,0},
+  {"close N","pnevmo",CMD_BTN,-1,-1,-1,30000,0,0,/*volume*/-10,500,1,/*tempr*/-100,300,1,/*hym*/0,110,1,/*relays*/1,10,6,0,0,0,0,0,0,0},
+
+  {"close auto E","pnevmo",-1,-1,-1,-1,15000,1800000,0,/*volume*/-10,500,1,/*tempr*/-100,20,1,/*hym*/0,110,1, /*relays*/1,9,5,0,0,0,0,0,0,0},
+  {"open auto E","pnevmo",-1,-1,-1,-1,15000,1800000,0,/*volume*/-10,500,1,/*tempr*/26,300,1,/*hym*/0,110,1,/*relays*/2,5,9,0,0,0,0,0,0,0},
+  {"close auto W","pnevmo",-1,-1,-1,-1,15000,1800000,0,/*volume*/-10,500,1,/*tempr*/-100,22,1,/*hym*/0,110,1, /*relays*/1,8,4,0,0,0,0,0,0,0},
+  {"open auto W","pnevmo",-1,-1,-1,-1,15000,1800000,0,/*volume*/-10,500,1,/*tempr*/27,300,1,/*hym*/0,110,1,/*relays*/2,8,4,0,0,0,0,0,0,0},
+  {"open auto S","pnevmo",-1,-1,-1,-1,20000,1800000,0,/*volume*/0.5,1.5,1,/*tempr*/25,300,1,/*hym*/0,110,1,/*relays*/2,7,3,0,0,0,0,0,0,0},
+  {"close auto S","pnevmo",-1,-1,-1,-1,20000,1800000,0,/*volume*/-10,500,1,/*tempr*/-100,22,1,/*hym*/0,110,1, /*relays*/1,7,3,0,0,0,0,0,0,0},
+  {"close rain S","pnevmo",-1,-1,-1,-1,20000,370000,0,/*volume*/-0.5,0.5,1,/*tempr*/20,40,1,/*hym*/0,110,1, /*relays*/1,7,3,0,0,0,0,0,0,0},
+  {"open auto N","pnevmo",-1,-1,-1,-1,20000,1800000,0,/*volume*/0.5,1.5,1,/*tempr*/25,300,1,/*hym*/0,110,1,/*relays*/2,10,6,0,0,0,0,0,0,0},
+  {"close auto N","pnevmo",-1,-1,-1,-1,20000,1800000,0,/*volume*/-10,500,1,/*tempr*/-100,22,1,/*hym*/0,110,1, /*relays*/1,10,6,0,0,0,0,0,0,0},
+  {"close rain N","pnevmo",-1,-1,-1,-1,20000,370000,0,/*volume*/-0.5,0.5,1,/*tempr*/20,40,1,/*hym*/0,110,1, /*relays*/1,10,6,0,0,0,0,0,0,0}
   };
 #endif
 
@@ -260,50 +307,13 @@ scheduler schedulers_arr[]={
 
 //---------------------------------------------------------------------------
 // В новой редакции у task нет данных по релле и т.п. => инициализировать по сути нечего
-/*
-class general_init: public general_do
-{
-  public:
 
- 
-   virtual void handle(task *x) {
-#ifdef DEBUG_PLUS
-    digitalClockDisplay();
-    dprint (x->taskname);dprintln(" init");
-#endif
-for(int i=0;i<NOFRELAYS;i++)
- {
-   if(x->relays[i]>0)
-    pinMode(relays[x->relays[i]], OUTPUT);
-    digitalWrite(relays[x->relays[i]], HIGH);
- }
-   }
-} generalInit;
 
-*/
-#ifdef DEBUG_VIOLET_BTN
-int vts=0;
-#endif
+// Стандартные процедуры start, exce, stop
 class default_start: public general_start   
 {
   public:
    virtual void start(proc *x) {
-    digitalClockDisplay();
-    dprint(x->currentTask->taskname);dprintln(" started");
- 
-     if(x->currentShed->StMin>=0)  //если задача перманентная то задержка 49 дней (раньше сработает штатная перезагрузка)
-     {
-        x->finish=x->currentShed->duration+millis();
-        pulseCount=0;   //при старте типовой задачи сбрасываем датчик воды
-
-     }
-       else//если задача перманентная то задержка 49 дней (раньше сработает штатная перезагрузка)
-        {
-        x->finish=4294967290;
-        }
-#ifdef DEBUG_PLUS
-dprintln("x->finish set to"+String(x->finish));
-#endif 
     for(int i=0;i<NOFRELAYS;i++)
      {
       if(x->currentShed->relays[i]>0)
@@ -311,9 +321,7 @@ dprintln("x->finish set to"+String(x->finish));
 #ifdef DEBUG_PLUS
 dprintln("try to start rellay"+String(x->currentShed->relays[i]));
 #endif 
-       
-
-        digitalWrite(relays[x->currentShed->relays[i]-1],LOW);
+       digitalWrite(relays[x->currentShed->relays[i]-1],LOW);
        }
      }
    }
@@ -324,78 +332,6 @@ class default_exec: public general_do
   public:
    virtual void handle(proc *x) {
 
-bool sens=true;
-    for(int i=0;i<NOFSENSORS;i++)
-     {
-      if(sensors[i]<-10000)
-       sens*=1;
-      else
-       {
-        
-       float dd=0;
-       if(x->interruped!=0)  //Если задача прервана то двигаем диапазон на sensors_delta[i], чтобы избежать дребезга 
-         {
-         dd=sensors_delta[i]*((x->currentShed->orderD[i])?1.:-1.);
-//          dprint("dd:");dprint(String(dd));dprint(" sensor value  ");dprint(String(sensors[i]));dprint(" sensor delta  ");dprintln(String(sensors_delta[i]));
-         }
-        
-         sens*=(x->currentShed->startD[i]+dd<=sensors[i] && sensors[i]<=x->currentShed->stopD[i]-dd)?x->currentShed->orderD[i]:(!x->currentShed->orderD[i]);
-       
-       }
-#ifdef DEBUG_MINUS   
-     dprint(x->taskname);dprint(" sens ");dprint(i); dprint(" value");dprint(sens);dprint(" sensor value  ");dprintln(sensors[i]);
-#endif   
-     }
-    if(sens)
-     {
-     for(int i=0;i<NOFRELAYS;i++)
-     {
-      if(x->currentShed->relays[i]!=0)
-        digitalWrite(relays[x->currentShed->relays[i]-1],LOW);
-     }
-     if(x->interruped!=0)
-      {
-       digitalClockDisplay();
-       dprint(x->currentShed->taskname);dprintln(" resume"); 
-       dprint("sensors: ");
-       print_sensors();
-      x->interruped=0;
-      }
-     }
-    else
-     {
-      if(x->currentShed->StMin<0) //если это перманентная задача
-       {
-        
-       
-        if(x->currentShed->finish==0 && (!x->interruped))
-         {                                                            //если это перманентная задача
-          x->currentShed->finish=millis()+x->currentShed->duration;  //то duration это задержка отключения после выхода датчика из диапазона
-         }
-       }
-
-     //  Serial.println(schedulers_arr[x->schedulerID].finish-millis());
-      if( (x->currentShed->finish<millis() && x->currentShed->StMin<0)|| x->currentShed->StMin>=0) // если вышло время задержки или задача не перманентная - выключаем реле
-       {                                                                                           // в порядке указанном при инициализации задачи
-       for(int i=0;i<NOFRELAYS;i++)
-        {
-        if(x->currentShed->relays[i]!=0)
-        digitalWrite(relays[x->currentShed->relays[i]-1],HIGH);
-        }
-       if(!x->interruped)
-        {
-       digitalClockDisplay();
-       dprint(x->currentTask->taskname);dprintln(" interruped"); 
-       dprint("sensors: ");
-       print_sensors();
-      x->interruped=1;
-       }
-       if(x->currentShed->StMin<0) // Если задача перманентная сбрасываем задержку
-        {
-           x->currentShed->finish=0;
-        }
-      }
-     }
    }
 } defaultExec;
 
@@ -403,33 +339,133 @@ class default_stop: public general_stop
 {
   public:
    virtual void stop(proc *x) {
-    if(x->milstart!=0)
-     {
-#ifdef DEBUG_VIOLET_BTN
-   if(x->currentShed->taskname.equals("Violet task"))
-    {
-      vts=0;      
-    }
-#endif
-      digitalClockDisplay();
-      dprint(x->currentShed->taskname);dprintln(" stoped");
-      print_sensors();
-      for(int i=0;i<NOFRELAYS;i++)
+
+      for(int i=NOFRELAYS-1;i>=0;i--)   //отключаем реле в обратном порядке
         {
         if(x->currentShed->relays[i]!=0)
           digitalWrite(relays[x->currentShed->relays[i]-1],HIGH);
         }
-     }
+    /* }  */
    }
 } defaultStop;
 
+// Start stop exec под пневмо цилиндры
+#define PNEVMO_DELTA 100
+class pnevmo_exec: public general_do
+{
+ public:
+  long timer;
+  bool startstop;
+  bool openclose;
+   virtual void handle(proc *x) {
+    time_t ntime = now();
+    if((hour(ntime)>7 and hour(ntime)<23))
+     {
+    if(timer<0)
+    {
+      startstop=0;
+      timer=millis()+4*PNEVMO_DELTA;
+    }
+    else
+     {
+      if(timer<millis())
+      {
+      startstop=(!startstop);
+      if(startstop==0)
+       {
+         timer=millis()+2*PNEVMO_DELTA;
+       }
+      else
+       { 
+         timer=millis()+10*PNEVMO_DELTA;
+       }
+      }
+     }
+ 
+   for(int i=0;i<NOFRELAYS;i++)
+     {
+      if(x->currentShed->relays[i]>2)
+       {
+       digitalWrite(relays[x->currentShed->relays[i]-1],startstop);
+       }
+     }
+    }
+  else
+   {
+     for(int i=0;i<NOFRELAYS;i++)
+     {
+       digitalWrite(relays[x->currentShed->relays[i]-1],LOW);
+     }
+   }
+     
+   }
+
+} pnevmoExec;
+
+class pnevmo_start: public general_start   
+{
+  public:
+   virtual void start(proc *x) {
+        if(x->currentShed->duration==PERMANENT_DURATION)
+         {
+         // Пневмо задача не может быть перманентной!!!  
+         dprintln("Error!!! Permanent pnevmo task");
+         return;
+          
+       //  x->finish=PERMANENT_DURATION;
+         }
+  pnevmo_exec * pne;
+  pne=(pnevmo_exec*)x->currentTask->exec;   
+  pne->openclose=0;
+    for(int i=0;i<NOFRELAYS;i++)
+     {
+      if(x->currentShed->relays[i]>0) 
+       {
+        digitalWrite(relays[x->currentShed->relays[i]-1],LOW);
+        if(x->currentShed->relays[i]==2)
+         {
+         pne->openclose=1;    //Если в списке есть реле - 2 значит выполняется открытие
+         }
+       }
+     }
+
+   pne->timer=-1;
+   pne->startstop=HIGH;
+   }
+} pnevmoStart;
+
+
+class pnevmo_stop: public general_stop
+{
+  public:
+   virtual void stop(proc *x) {
+       for(int i=NOFRELAYS-1;i>=0;i--)   //отключаем реле в обратном порядке
+        {
+          if(x->currentShed->relays[i]>2)
+           {
+           digitalWrite(relays[x->currentShed->relays[i]-1],HIGH);
+           }
+        }
+          Alarm.delay(200);
+          digitalWrite(relays[0],HIGH); //Насос и клапан отключаем отдельно принудительно
+          digitalWrite(relays[1],HIGH); 
+   }
+} pnevmoStop;
+
+// General_start / general_stop работает для всех task
+
 void general_start::handle(proc *x)
 {
-  this->start(x);
-  x->milstart=millis();  
-#ifdef DEBUG_VIOLET_BTN
-dprint("Alarm count: ");dprintln(Alarm.count());
-#endif  
+   x->milstart=millis();  
+  if(x->currentShed->duration==PERMANENT_DURATION)
+    {
+    x->finish=PERMANENT_DURATION;
+    }
+  else
+    {
+    x->finish=x->currentShed->duration+millis();
+    }
+  pulseCount=0;   //при старте типовой задачи сбрасываем датчик воды
      if(Alarm.count()<NOFALARMS)
       {
       x->currentShed->aID=-1;
@@ -443,24 +479,38 @@ dprint("Alarm count: ");dprintln(Alarm.count());
       bindShedulertoAlarm(getnextscheduler());
 #endif     
       }
+  this->start(x);
+  digitalClockDisplay();
+  dprint(x->currentShed->schedulername);dprintln(" started");
+#ifdef DEBUG_PLUS
+dprintln(millis());
+dprintln("x->finish set to"+String(x->finish));
+dprintln("x->pnevmofinish set to"+String(x->finish));
+#endif 
+
 }
 
 void general_stop::handle(proc *x)
 {
- 
-   this->stop(x);
-   x->currentShed=NULL;
-   x->aID=-1;
-   x->milstart=0;
+    if(x->milstart!=0)
+     {
+      digitalClockDisplay();
+      dprint(x->currentShed->schedulername);dprintln(" finished");
+#ifdef DEBUG_PLUS
+dprintln(millis());
+dprint("real rain status:");
+dprintln(digitalRead(water_btn));
+#endif 
+      print_sensors();
+      x->currentShed->laststop=millis();
+      this->stop(x);
+     }
+
+
+   x->freeproc();
 }
 //------------------------------------------------------------------------------
-/*class stop_init: public general_do
-{
-  public:
-   virtual void handle(task *x) {
-  
-   }
-} stopInit;*/
+
 
 class stop_start: public general_start
 {
@@ -468,6 +518,7 @@ class stop_start: public general_start
    virtual void start(proc *x) {
     digitalClockDisplay();
     dprintln(" emergancy STOP");
+    Alarm.delay(10000);
     emergency_stop();
    }
 } stopStart;
@@ -504,6 +555,16 @@ proc::proc()
   currentShed=NULL;
 }
 
+void proc::freeproc()
+{
+  interruped=0;
+  aID=-1;
+  milstart=0;
+  finish=0;
+  currentTask=NULL;
+  currentShed=NULL;
+ 
+}
 proc procs_arr[NOFPROCS];
 
 int getfreeproc()  //ищем свободный процесс 
@@ -523,6 +584,40 @@ dprintln("i:"+String(i)+" procs_arr[i].milstart:"+String(procs_arr[i].milstart))
    return(freeproc);
 }
 
+
+
+void proc::check()
+{  //проверяем не закончилось ли время работы процесса
+#ifdef DEBUG_LOOP
+dprintln("next check.proc started");
+#endif 
+
+if(finish>0)
+ {
+#ifdef DEBUG_LOOP
+dprintln("check.proc "+currentShed->schedulername+" finish ="+String(finish));
+#endif 
+
+    if(finish>millis())
+     {
+      currentTask->exec->handle(this);
+#ifdef DEBUG_LOOP
+dprintln("check.proc "+currentShed->schedulername+" exec done ");
+
+#endif
+     }
+    else
+     {
+#ifdef DEBUG_LOOP
+dprintln("check.proc "+currentShed->schedulername+" GO TO STOP ");
+
+#endif
+      currentTask->fin->handle(this);
+     }
+ } 
+}
+
+
 task::task(String _taskname,general_start * _start,general_do * _exec,general_stop * _fin)
    :taskname(_taskname),start(_start),exec(_exec),fin(_fin)
 {
@@ -531,35 +626,10 @@ dprintln("--------------------init--------------");
 #endif
 }
 
-void proc::check()
-{  //проверяем не закончилось ли время работы процесса
-if(finish>0)
- {
-    if(finish>millis())
-     {
-      currentTask->exec->handle(this);
-#ifdef DEBUG_LOOP
-dprintln("exec done");
-#endif
-     }
-    else
-     {
-      currentTask->fin->handle(this);
-     }
- } 
-}
-//int relays[]={violet_rel,white_rel,blue_rel,green_rel,yellow_rel,orange_rel,brown_rel,lightgreen_rel};
-
-
 task tasks_arr[]={
-  {"Violet task",&defaultStart,&defaultExec,&defaultStop},
-  {"teplica close",&defaultStart,&defaultExec,&defaultStop},
-  {"blue task",&defaultStart,&defaultExec,&defaultStop},
-  {"green task",&defaultStart,&defaultExec,&defaultStop},
-  {"yellow task",&defaultStart,&defaultExec,&defaultStop},
+  {"pnevmo",&pnevmoStart,&pnevmoExec,&pnevmoStop},
+ // {" close",&pnevmoStart,&pnevmoExec,&pnevmoStop},
   {"Orange task",&stopStart,&stopExec,&stopFin}
-  ,
-  {"tempr task",&defaultStart,&defaultExec,&defaultStop}
   };
  
 int getnextscheduler()   //Ищем ближайший по времени scheduler 
@@ -572,12 +642,6 @@ time_t tt;
 time_t ct=now()+8*SECS_PER_DAY;
   for (int i=0;i<NOFSCHEDULER;i++) 
   {
- /* for (j=0;j<NOFTASKS;j++)
-   {
-    if(tasks_arr[j].taskname.equals(schedulers_arr[i].taskname)) 
-     break;
-   }
- */  
    if(schedulers_arr[i].StMin>=0 && schedulers_arr[i].StHour>=0) //Только если не перманентный scheduler
     {
     if((schedulers_arr[i].aID<0)  /*&& (tasks_arr[j].aID<0)  */)
@@ -636,19 +700,16 @@ int procid=-1;
                   break;
                   }
                }
-              procs_arr[procid].milstart=millis();
+              procs_arr[procid].milstart=millis();/*
+              procs_arr[procid].finish=procs_arr[procid].milstart+nsched->duration;
+              procs_arr[procid].aID= nsched->aID;*/
               procs_arr[procid].currentTask->start->handle(&procs_arr[procid]); 
-#ifdef DEBUG_PLUS
-dprintln("New proc started"+String(procid));
-#endif              
               }
              else
               {
               dprint("No free proc for task:"+nsched->taskname+" scheduler id:"+String(i));
               }
-  //           ntask.start->handle(&ntask);
-//            break;
-            }
+             }
            else
             {
              dprint("scheduler id:"+String(id)+" already running");
@@ -658,41 +719,135 @@ return(procid);
 }
 void scheduler::check()
 {
-  
-// Need revision!!!
 
-  if(btn>0)
+byte isrun=0;
+int proc_id;
+bool sens=true;
+#ifdef DEBUG_LOOP
+dprintln("check.Scheduler "+schedulername+" started");
+#endif
+for(proc_id=NOFPROCS-1;proc_id>=0;proc_id--)
+ {
+ if(procs_arr[proc_id].currentShed!=NULL)
   {
-#ifdef DEBUG_VIOLET_BTN
-#ifdef GPSTRACKER
-   if(btn==violet_btn && vts==0)
-    {
-      vts++;
-#else 
-   if(digitalRead(btn)==HIGH && millis()>btnHIGHmillis+BTNTRIM)
-   {
-#endif
-#else
-  if(digitalRead(btn)==HIGH && millis()>btnHIGHmillis+BTNTRIM)
-   {
-#endif
-    byte isrun=0;
-    btnHIGHmillis=millis();
-    for (proc & nproc : procs_arr)
+#ifdef DEBUG_LOOP
+dprintln("procs_arr[proc_id].currentShed!=NULL procid="+String(proc_id));
+#endif 
+
+  if(procs_arr[proc_id].currentShed->schedulername==this->schedulername)  //есть процесс с этим scheduler 
+    break;
+  }
+ }
+#ifdef DEBUG_LOOP
+dprintln("check.Scheduler "+schedulername+" proc seek finished "+String(proc_id));
+#endif 
+for(int i=0;i<NOFSENSORS;i++)
      {
-       if(this==nproc.currentShed)  //если есть процесс с этим scheduler который то останавливаем процесс
-        {
-        isrun++;
-        nproc.currentTask->fin->handle(&nproc);
-        }
+      if(sensors[i]<-10000)
+       sens*=1;
+      else
+       {
+        
+       float dd=0;
+       if(proc_id<0)  //Если нет процесса с таким scheduler то двигаем диапазон на sensors_delta[i], чтобы избежать дребезга 
+         {
+         dd=sensors_delta[i]*((this->orderD[i])?1.:-1.);
+//          dprint("dd:");dprint(String(dd));dprint(" sensor value  ");dprint(String(sensors[i]));dprint(" sensor delta  ");dprintln(String(sensors_delta[i]));
+         }
+        
+         sens*=(this->startD[i]+dd<=sensors[i] && sensors[i]<=this->stopD[i]-dd)?this->orderD[i]:(!this->orderD[i]);
+       
+       }
+
      }
-   // Если все процессы перебрали и не нашли запускаем новый
-    if(isrun==0)
+#ifdef DEBUG_LOOP
+dprintln("check.Scheduler "+schedulername+" sensors checked sens:"+String(sens));
+#endif
+ 
+if(btn>0)
+  {
+  bool btnstatus=false;
+  if(btn<40) 
+   {
+    btnstatus=digitalRead(btn);
+   }
+  if(!btnstatus) 
+   {
+    btcmd.trim();    
+    btnstatus=schedulername.equals(btcmd);
+ //   if(btcmd!="")
+ //   dprint("btcmd="+btcmd+"btnstatus "+String(btnstatus));
+  
+   }
+  if(btnstatus==HIGH && millis()>btnHIGHmillis+BTNTRIM)
+   {
+#ifdef DEBUG_PLUS
+dprintln("----------------check.Scheduler "+schedulername+" button presed. ProcID"+String(proc_id));
+#endif
+    laststop=0;
+    btnHIGHmillis=millis();
+    if(proc_id<0)
      {
-      startnewproc(this);
+      sens=sens*1;
+     }
+    else
+     {
+      sens=false;
+      procs_arr[proc_id].interruped=1;
      }
    }
+  else
+   {
+      if(proc_id<0)
+       {
+          sens=false;
+ //         btnHIGHmillis=0;
+       }
+      else
+       {
+        if(millis()> btnHIGHmillis+BTNTRIM+this->preexitdelay && procs_arr[proc_id].interruped==1)  
+         {  //Кнопка задана, не нажата, есть процесс и запущен останов (было не завершенное нажатие) + у процесса стоит флаг interruped
+           procs_arr[proc_id].interruped=0;
+           sens=false;
+         }
+         
+       }
+   }
   }
+
+ if(sens)
+     {
+#ifdef DEBUG_LOOP
+dprintln("Scheduler "+schedulername+" sens true");
+#endif
+     if(proc_id<0 && this->StMin<0)  //Если расписание не задано - стартуем. Если у задачи есть расписание, то она стартует ТОЛЬКО по расписанию 
+      {                               // Если нужен ручной старт то надо создать еще один scheduler без расписания
+      if((laststop==0) || ((laststop+interval)<millis()))
+      startnewproc(this);
+      }
+     }
+    else
+     {
+#ifdef DEBUG_LOOP
+dprintln("Scheduler "+schedulername+" sens FALSE");
+#endif
+     if(proc_id>=0)   //Если есть процесс этого scheduler
+      {
+      if(this->StMin<0) //если это перманентная задача
+       {
+           procs_arr[proc_id].finish=millis()+this->preexitdelay;  
+       }
+
+      if( (procs_arr[proc_id].finish<millis() && this->StMin<0)|| this->StMin>=0) // если вышло время задержки или задача не перманентная - выключаем реле
+       {                                                                                           // в порядке обратном включению !!!! 
+           procs_arr[proc_id].finish=0;
+           procs_arr[proc_id].currentTask->fin->handle(&procs_arr[proc_id]);
+       }
+      }  
+     }
+#ifdef DEBUG_LOOP
+dprintln("Scheduler "+schedulername+" check finised");
+#endif
 }
 
 int bindShedulertoAlarm(int id)
@@ -775,10 +930,35 @@ void btCallback(esp_spp_cb_event_t event, esp_spp_cb_param_t *param)
     pushbuffer=1;
   }
 }
-
+#define RAINDELAY 120000
+unsigned long rainstart=0;
 void refresh_sensors()
 {
-  sensors[Vol]=pulseCount*2.25/1000.;
+  //sensors[Vol]=pulseCount*2.25/1000.;
+
+
+  if(digitalRead(water_btn)==0)
+   {
+#ifdef DEBUG_LOOP
+   dprintln("rain sensor is 0");
+
+#endif
+    rainstart=millis();
+    sensors[Vol]=0;  // Датчик дождя
+   }
+   else
+   {
+    if(((rainstart+RAINDELAY)>millis()) && (rainstart>0))
+     {
+      sensors[Vol]=0;
+     }
+     else
+     {
+      sensors[Vol]=1;
+     }
+   }
+
+  
   float hp = dht.readHumidity();
   float tp = dht.readTemperature();
   if(!isnan(hp)) sensors[Hum]=hp;
@@ -813,38 +993,23 @@ for(i=0;i<NOFBTNS;i++)
    Alarm.delay(500);  
    dprintln("Search GPS..");
    Alarm.delay(1000);
-#ifdef GPSTRACKER
-// Если для отладки использую плату трекера
- pinMode(23, OUTPUT);
- digitalWrite(GPIO_NUM_23, HIGH);
-#endif
+//Подключаем датчик дождя
+pinMode(water_btn, INPUT_PULLUP);
+digitalRead(water_btn);
+//attachInterrupt(digitalPinToInterrupt(water_btn), pulseCounter, FALLING);
 
 refresh_sensors();
 setTime(setTimefromGPS(60*30*1000));
 setSyncProvider(CsetTimefromGPS);
 setSyncInterval(TIME_UPDATE);
-// Иницализируем задачи
-// Устарело for (task & ntask : tasks_arr) ntask.init->handle(&ntask);
 // Устанавливаем таймеры
 for(int i=0;i<NOFALARMS;i++)
  {
   bindShedulertoAlarm(getnextscheduler());
  }
-for (i=0;i<NOFSCHEDULER;i++) 
- {
-  if(schedulers_arr[i].StMin<0 && schedulers_arr[i].StHour<0)  // ищем и запускаем перманентные задачи
-   {
-   startnewproc(&schedulers_arr[i]);
-   }
- }
+
 #ifdef DEBUG_PLUS
 dprintln("Procs compleate");
-#endif 
-//Подключаем расходомер
-pinMode(water_btn, INPUT_PULLUP);
-attachInterrupt(digitalPinToInterrupt(water_btn), pulseCounter, FALLING);
-#ifdef DEBUG_PLUS
-dprintln("rashod attached");
 #endif 
 
 //Сбрасываем значения датчиков в неопределено 
@@ -948,10 +1113,17 @@ refresh_sensors();
 
 //   float hp = dht.readHumidity();
 //   float tp = dht.readTemperature();
+   dprint("real rain status:"); dprintln(digitalRead(water_btn));
    dprint("Volume:");  dprint(String(sensors[Vol]));
    dprint("Humidity:");  dprint(String(sensors[Hum]));
    dprint("Temperature:");  dprintln(String(sensors[Tem]));
-  }
+   }
+btcmd="";
+  if(SerialBT.available())
+    {
+       btcmd=SerialBT.readString();
+    }
+
 if(millis()>mill_restart) 
  {
   byte rst=1;
